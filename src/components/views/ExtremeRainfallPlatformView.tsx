@@ -207,8 +207,11 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
         homogeneity,
         characterization,
         indices: amsRx1,
+        amsRx1,
         indices_rx3day: amsRx3,
+        amsRx3,
         indices_rx5day: amsRx5,
+        amsRx5,
         storm_daniel: stormDaniel,
         models,
         return_levels: returnLevels,
@@ -1856,7 +1859,13 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
         stationName={stationName}
         stationId={stationId}
         sourceName={uploadedFileSource}
-        nYearsAMS={hydro ? hydro.amsRx1.filter((a: any) => a.eligible_for_model).length : 0}
+        nYearsAMS={
+          hydro?.amsRx1
+            ? hydro.amsRx1.filter((a: any) => a.eligible_for_model).length
+            : hydro?.indices
+            ? hydro.indices.filter((a: any) => a.eligible_for_model).length
+            : hydro?.nYears ?? 0
+        }
         hasMissingYearWithZero={false}
         analysisRunId={analysisRunId}
         onExportPDF={exportToPDF}
