@@ -536,3 +536,70 @@ export interface AnalysisExecutionResult {
   nav_target?: string;
 }
 
+export interface DataFilterOptions {
+  stationId?: string;
+  startDate?: string;
+  endDate?: string;
+  governorate?: string;
+  ecoRegion?: string;
+  excludeFlags?: string[];
+  analysisType?: 'daily' | 'hourly' | 'ams' | 'storm';
+}
+
+export interface AuditTrailItem {
+  id: string;
+  row_id: string | number;
+  date: string;
+  field: string;
+  old_value: any;
+  new_value: any;
+  user: string;
+  created_at: string;
+  reason: string;
+}
+
+export interface StructuredArabicPlan {
+  station_id?: string;
+  station_name?: string;
+  date_start?: string;
+  date_end?: string;
+  analysis: 'Rx1day' | 'Rx3day' | 'Rx5day' | 'GEV_Gumbel' | 'ReturnLevel' | 'DanielStorm' | 'Summary';
+  model?: 'GEV' | 'Gumbel' | null;
+  unit: string;
+  confidence_level: number;
+  outputs: string[];
+  warnings?: string[];
+  user_query: string;
+}
+
+export interface SourceComparisonResult {
+  source1_name: string;
+  source2_name: string;
+  common_days_count: number;
+  bias_mm: number;
+  mae_mm: number;
+  rmse_mm: number;
+  correlation: number;
+  disclaimer: string;
+}
+
+export interface ConfidenceLevelScore {
+  level: 'High' | 'Medium' | 'Low' | 'Not Suitable for Design';
+  level_ar: 'مرتفع وموثوق' | 'متوسط' | 'منخفض' | 'غير صالح للاعتماد الهندسي';
+  score: number;
+  reasons_ar: string[];
+}
+
+export type UserRole = 'Viewer' | 'Researcher' | 'Reviewer' | 'Admin';
+
+export interface ScientificReviewComment {
+  id: string;
+  author: string;
+  role: UserRole;
+  date: string;
+  status: 'Pending' | 'Accepted' | 'Needs Revision' | 'Rejected';
+  comment: string;
+  target_section: string;
+}
+
+

@@ -36,6 +36,8 @@ import {
   MapPin,
   HelpCircle,
   Eye,
+  Filter,
+  Sparkles,
 } from 'lucide-react';
 
 import { DailyRecord, CalculationStepExplanation } from '../../types';
@@ -64,6 +66,17 @@ import {
 import { SpatialRainfallChart } from '../SpatialRainfallChart';
 import { FormulasAndReferencesModal } from '../FormulasAndReferencesModal';
 import { CalculationStepsModal } from '../CalculationStepsModal';
+import { ManualScientificCalculatorModal } from '../ManualScientificCalculatorModal';
+import { DataSelectionWorkspaceModal } from '../DataSelectionWorkspaceModal';
+import { DataEditorAuditModal } from '../DataEditorAuditModal';
+import { ArabicQueryParserModal } from '../ArabicQueryParserModal';
+import { StormEventBuilderModal } from '../StormEventBuilderModal';
+import { MultiStationAnalysisModal } from '../MultiStationAnalysisModal';
+import { DataCatalogComparisonModal } from '../DataCatalogComparisonModal';
+import { ProjectRunsManagerModal } from '../ProjectRunsManagerModal';
+import { PreExportValidationModal } from '../PreExportValidationModal';
+import { RolesReviewModal } from '../RolesReviewModal';
+import { AuditTrailItem, StructuredArabicPlan } from '../../types';
 import { runFullAnalysis } from '../../lib/api';
 
 export const ExtremeRainfallPlatformView: React.FC = () => {
@@ -74,6 +87,11 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
   const [records, setRecords] = useState<DailyRecord[]>(
     DEMO_DAILY_RECORDS.filter((r) => r.station_id === 'ALX01')
   );
+  const [unfilteredRecords, setUnfilteredRecords] = useState<DailyRecord[]>(
+    DEMO_DAILY_RECORDS.filter((r) => r.station_id === 'ALX01')
+  );
+  const [filterFingerprint, setFilterFingerprint] = useState<string>('DEFAULT_FILTER');
+  const [auditTrailList, setAuditTrailList] = useState<AuditTrailItem[]>([]);
   const [uploadedFileName, setUploadedFileName] = useState<string>('Alexandria_Synthetic_Demo.csv');
   const [uploadedFileSource, setUploadedFileSource] = useState<string>('سجل تجريبي اصطناعي (Demo)');
   const [analysisRunId, setAnalysisRunId] = useState<string>(`RUN_${Date.now()}`);
@@ -91,6 +109,16 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
   const [showFormulasModal, setShowFormulasModal] = useState<boolean>(false);
   const [calculationStepData, setCalculationStepData] = useState<CalculationStepExplanation | null>(null);
   const [showCalculationModal, setShowCalculationModal] = useState<boolean>(false);
+  const [showManualCalculatorModal, setShowManualCalculatorModal] = useState<boolean>(false);
+  const [showDataSelectionModal, setShowDataSelectionModal] = useState<boolean>(false);
+  const [showDataEditorModal, setShowDataEditorModal] = useState<boolean>(false);
+  const [showArabicParserModal, setShowArabicParserModal] = useState<boolean>(false);
+  const [showStormBuilderModal, setShowStormBuilderModal] = useState<boolean>(false);
+  const [showMultiStationModal, setShowMultiStationModal] = useState<boolean>(false);
+  const [showDataCatalogModal, setShowDataCatalogModal] = useState<boolean>(false);
+  const [showProjectRunsModal, setShowProjectRunsModal] = useState<boolean>(false);
+  const [showPreExportModal, setShowPreExportModal] = useState<boolean>(false);
+  const [showRolesReviewModal, setShowRolesReviewModal] = useState<boolean>(false);
   const [inputRainMm, setInputRainMm] = useState<number>(65);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
@@ -422,6 +450,7 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
     setStationName(cleanStation);
     setStationId(cleanId);
     setRecords(parsed);
+    setUnfilteredRecords(parsed);
 
     executeScientificPipeline(
       parsed,
@@ -433,6 +462,89 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
       randomSeed,
       isProduction
     );
+  };
+
+  const handleLoadManualInputIntoPipeline = (
+    manualRecords: DailyRecord[],
+    manualStationName: string,
+    manualStationId: string
+  ) => {
+    setIsProductionMode(true);
+    setStationName(manualStationName);
+    setStationId(manualStationId);
+    setRecords(manualRecords);
+    setUnfilteredRecords(manualRecords);
+    setUploadedFileName('manual_user_input.csv');
+    setUploadedFileSource('Manual User Input / Source: User Provided');
+    const newRunId = `RUN_MANUAL_${Date.now()}`;
+    setAnalysisRunId(newRunId);
+    setAnalysisTimestamp(new Date().toLocaleString('ar-EG'));
+
+    executeScientificPipeline(
+      manualRecords,
+      manualStationName,
+      manualStationId,
+      'Manual User Input / Source: User Provided',
+      'manual_user_input.csv',
+      completenessThreshold,
+      randomSeed,
+      true
+    );
+  };
+
+  // Handler for Data Selection Workspace
+  const handleApplyDataSelection = (filtered: DailyRecord[], summary: any) => {
+    setRecords(filtered);
+    setFilterFingerprint(summary.fingerprint);
+    executeScientificPipeline(
+      filtered,
+      stationName,
+      stationId,
+      uploadedFileSource,
+      uploadedFileName,
+      completenessThreshold,
+      randomSeed,
+      isProductionMode
+    );
+  };
+
+  const handleResetDataSelection = () => {
+    setRecords(unfilteredRecords);
+    setFilterFingerprint('UNFILTERED_DEFAULT');
+    executeScientificPipeline(
+      unfilteredRecords,
+      stationName,
+      stationId,
+      uploadedFileSource,
+      uploadedFileName,
+      completenessThreshold,
+      randomSeed,
+      isProductionMode
+    );
+  };
+
+  // Handler for Data Editor Save
+  const handleSaveCleanedData = (cleaned: DailyRecord[], auditTrail: AuditTrailItem[]) => {
+    setRecords(cleaned);
+    setAuditTrailList((prev) => [...auditTrail, ...prev]);
+    executeScientificPipeline(
+      cleaned,
+      stationName,
+      stationId,
+      `${uploadedFileSource} (Cleaned Data)`,
+      uploadedFileName,
+      completenessThreshold,
+      randomSeed,
+      isProductionMode
+    );
+  };
+
+  // Handler for Arabic Natural Language Parser Dispatch
+  const handleExecuteArabicPlan = (plan: StructuredArabicPlan) => {
+    if (plan.station_id && plan.station_id !== stationId) {
+      setStationId(plan.station_id);
+      setStationName(plan.station_name || plan.station_id);
+    }
   };
 
   const applyColumnMapping = (
@@ -606,21 +718,83 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
         </nav>
 
         {/* Action Controls in Sidebar */}
-        <div className="p-3 border-t border-slate-100 bg-slate-50/70 space-y-2 hidden md:block">
+        <div className="p-3 border-t border-slate-100 bg-slate-50/70 space-y-1.5 hidden md:block">
+          <button
+            onClick={() => setShowManualCalculatorModal(true)}
+            className="w-full py-1.5 bg-[#F7F3E8] border border-[#D7B98E] text-[#1D2939] hover:bg-[#F4EBDD] text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Calculator className="w-3.5 h-3.5 text-[#0E7490]" />
+            <span>الحاسبة اليدوية العلمية</span>
+          </button>
+          <button
+            onClick={() => setShowDataSelectionModal(true)}
+            className="w-full py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Filter className="w-3.5 h-3.5 text-blue-600" />
+            <span>تصفية واختيار جزء من الملف</span>
+          </button>
+          <button
+            onClick={() => setShowDataEditorModal(true)}
+            className="w-full py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+            <span>محرر البيانات و Audit Trail</span>
+          </button>
+          <button
+            onClick={() => setShowArabicParserModal(true)}
+            className="w-full py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+            <span>محلل الطلبات بالعربية</span>
+          </button>
+          <button
+            onClick={() => setShowStormBuilderModal(true)}
+            className="w-full py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-500" />
+            <span>منشئ ومحلل العواصف</span>
+          </button>
+          <button
+            onClick={() => setShowMultiStationModal(true)}
+            className="w-full py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Layers className="w-3.5 h-3.5 text-teal-600" />
+            <span>المقارنة الإقليمية للمحطات</span>
+          </button>
+          <button
+            onClick={() => setShowDataCatalogModal(true)}
+            className="w-full py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-blue-800" />
+            <span>كتالوج ومقارنة المصادر</span>
+          </button>
+          <button
+            onClick={() => setShowProjectRunsModal(true)}
+            className="w-full py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Activity className="w-3.5 h-3.5 text-slate-600" />
+            <span>المشاريع ومقارنة التشغيلات</span>
+          </button>
+          <button
+            onClick={() => setShowRolesReviewModal(true)}
+            className="w-full py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>الصلاحيات والتدقيق العلمي</span>
+          </button>
           <button
             onClick={() => setShowFormulasModal(true)}
-            className="w-full py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            className="w-full py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <BookOpen className="w-3.5 h-3.5 text-blue-600" />
             <span>المعادلات والمراجع العلمية</span>
           </button>
           <button
-            onClick={exportToPDF}
-            disabled={isExportingPDF}
-            className="w-full py-2.5 bg-slate-900 hover:bg-black text-white text-[11px] font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+            onClick={() => setShowPreExportModal(true)}
+            className="w-full py-2 bg-gradient-to-r from-emerald-700 to-teal-800 hover:from-emerald-800 hover:to-teal-900 text-white text-[11px] font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
-            {isExportingPDF ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 text-amber-400" />}
-            <span>{isExportingPDF ? 'جاري إنشاء PDF...' : 'تصدير التقرير الفني (PDF)'}</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+            <span>بوابة التحقق والتصدير الشامل</span>
           </button>
         </div>
       </aside>
@@ -635,57 +809,87 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
             {/* Real Alexandria Benchmark Fast Button */}
             <button
               onClick={handleLoadRealAlexandriaBenchmark}
-              className="whitespace-nowrap px-3.5 py-1.5 bg-gradient-to-r from-blue-900 to-indigo-900 hover:from-blue-950 hover:to-indigo-950 text-white text-[10px] font-bold rounded-lg shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+              className="whitespace-nowrap px-3 py-1.5 bg-gradient-to-r from-blue-900 to-indigo-900 hover:from-blue-950 hover:to-indigo-950 text-white text-[10px] font-bold rounded-lg shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
               title="تحميل ملف الإسكندرية القياسي (10,476 سجل NOAA GHCN-Daily)"
             >
               <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span>ملف الإسكندرية القياسي (10,476 سجل)</span>
+              <span>الإسكندرية (10,476)</span>
             </button>
 
             {/* Upload File */}
-            <label className="whitespace-nowrap px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-lg cursor-pointer shadow-sm flex items-center gap-1.5 transition-all">
+            <label className="whitespace-nowrap px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold rounded-lg cursor-pointer shadow-sm flex items-center gap-1.5 transition-all">
               <Upload className="w-3.5 h-3.5" />
-              <span>رفع ملف (CSV / Excel)</span>
+              <span>رفع ملف (CSV)</span>
               <input type="file" className="hidden" onChange={handleFileUpload} accept=".xlsx,.xls,.csv" />
             </label>
 
             {/* Switch to Demo Mode */}
             <button
               onClick={handleLoadDemo}
-              className="whitespace-nowrap px-3 py-1.5 text-[10px] font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-all border border-slate-200 cursor-pointer"
+              className="whitespace-nowrap px-2.5 py-1.5 text-[10px] font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-all border border-slate-200 cursor-pointer"
             >
               عينة تجريبية
+            </button>
+
+            {/* Manual Scientific Calculator Button */}
+            <button
+              onClick={() => setShowManualCalculatorModal(true)}
+              className="whitespace-nowrap px-3 py-1.5 bg-[#F7F3E8] hover:bg-[#F4EBDD] text-[#1D2939] border border-[#D7B98E] text-[10px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="الحاسبة العلمية للإدخال اليدوي"
+            >
+              <Calculator className="w-3.5 h-3.5 text-[#0E7490]" />
+              <span>حاسبة يدوية</span>
+            </button>
+
+            {/* Data Selection Workspace Button */}
+            <button
+              onClick={() => setShowDataSelectionModal(true)}
+              className="whitespace-nowrap px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="تصفية المحطات والسنوات وجزء الملف"
+            >
+              <Filter className="w-3.5 h-3.5 text-blue-600" />
+              <span>تصفية البيانات</span>
+            </button>
+
+            {/* Data Editor Button */}
+            <button
+              onClick={() => setShowDataEditorModal(true)}
+              className="whitespace-nowrap px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="محرر البيانات مع Undo وسجل التدقيق"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+              <span>محرر السجل</span>
+            </button>
+
+            {/* Arabic Natural Language Query Parser Button */}
+            <button
+              onClick={() => setShowArabicParserModal(true)}
+              className="whitespace-nowrap px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 text-[10px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="كتابة طلبات التحليل باللغة العربية"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+              <span>محلل الطلب بالعربية</span>
             </button>
 
             {/* Column Mapper Toggle if file uploaded */}
             {rawTableRows && (
               <button
                 onClick={() => setShowColumnMapper(!showColumnMapper)}
-                className="whitespace-nowrap px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                className="whitespace-nowrap px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
               >
                 <Layers className="w-3.5 h-3.5 text-blue-600" />
-                <span>ربط الأعمدة ({rawTableRows.length} صف)</span>
+                <span>ربط الأعمدة</span>
               </button>
             )}
 
-            {/* Raw Data Preview Button */}
-            {rawTableRows && (
-              <button
-                onClick={() => setShowDataPreview(!showDataPreview)}
-                className="whitespace-nowrap px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Eye className="w-3.5 h-3.5 text-slate-600" />
-                <span>معاينة أول 20 صفاً</span>
-              </button>
-            )}
-
-            {/* Excel Export */}
+            {/* Pre-Export Validation & Multi-Format Export */}
             <button
-              onClick={exportAllToExcel}
+              onClick={() => setShowPreExportModal(true)}
               className="whitespace-nowrap px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title="بوابة التدقيق قبل التصدير والتصدير متعدد الصيغ"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Excel</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+              <span>بوابة التصدير</span>
             </button>
           </div>
 
@@ -1595,6 +1799,92 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
       {/* MODALS */}
       <FormulasAndReferencesModal isOpen={showFormulasModal} onClose={() => setShowFormulasModal(false)} />
       <CalculationStepsModal isOpen={showCalculationModal} onClose={() => setShowCalculationModal(false)} data={calculationStepData} />
+      <ManualScientificCalculatorModal
+        isOpen={showManualCalculatorModal}
+        onClose={() => setShowManualCalculatorModal(false)}
+        onLoadIntoPipeline={handleLoadManualInputIntoPipeline}
+      />
+      <DataSelectionWorkspaceModal
+        isOpen={showDataSelectionModal}
+        onClose={() => setShowDataSelectionModal(false)}
+        allRecords={unfilteredRecords}
+        onApplyFilter={handleApplyDataSelection}
+        onResetFilter={handleResetDataSelection}
+        currentFilterFingerprint={filterFingerprint}
+      />
+      <DataEditorAuditModal
+        isOpen={showDataEditorModal}
+        onClose={() => setShowDataEditorModal(false)}
+        rawRecords={records}
+        onSaveCleanedData={handleSaveCleanedData}
+      />
+      <ArabicQueryParserModal
+        isOpen={showArabicParserModal}
+        onClose={() => setShowArabicParserModal(false)}
+        currentStationId={stationId}
+        currentStationName={stationName}
+        onExecutePlan={handleExecuteArabicPlan}
+      />
+      <StormEventBuilderModal
+        isOpen={showStormBuilderModal}
+        onClose={() => setShowStormBuilderModal(false)}
+        records={records}
+      />
+      <MultiStationAnalysisModal
+        isOpen={showMultiStationModal}
+        onClose={() => setShowMultiStationModal(false)}
+        currentStationId={stationId}
+      />
+      <DataCatalogComparisonModal
+        isOpen={showDataCatalogModal}
+        onClose={() => setShowDataCatalogModal(false)}
+      />
+      <ProjectRunsManagerModal
+        isOpen={showProjectRunsModal}
+        onClose={() => setShowProjectRunsModal(false)}
+        currentRunLog={{
+          analysis_run_id: analysisRunId,
+          timestamp: analysisTimestamp,
+          station_id: stationId,
+          station_name: stationName,
+        }}
+      />
+      <PreExportValidationModal
+        isOpen={showPreExportModal}
+        onClose={() => setShowPreExportModal(false)}
+        isProductionMode={isProductionMode}
+        stationName={stationName}
+        stationId={stationId}
+        sourceName={uploadedFileSource}
+        nYearsAMS={hydro ? hydro.amsRx1.filter((a: any) => a.eligible_for_model).length : 0}
+        hasMissingYearWithZero={false}
+        analysisRunId={analysisRunId}
+        onExportPDF={exportToPDF}
+        onExportExcel={exportAllToExcel}
+        onExportCSV={() => {
+          const csv = Papa.unparse(records);
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${stationId}_records.csv`;
+          a.click();
+        }}
+        onExportJSON={() => {
+          const jsonStr = JSON.stringify(hydro || records, null, 2);
+          const blob = new Blob([jsonStr], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${stationId}_analysis.json`;
+          a.click();
+        }}
+      />
+      <RolesReviewModal
+        isOpen={showRolesReviewModal}
+        onClose={() => setShowRolesReviewModal(false)}
+        stationName={stationName}
+      />
 
     </div>
   );

@@ -1954,3 +1954,255 @@ ${rx3.map(r => `${r.date}: ${r.value} مم`).join('\n')}
     data_source: source
   };
 }
+
+// ==========================================
+// 12. Manual Scientific Calculator Engine
+// ==========================================
+
+export interface ManualListCalculationResult {
+  index: 'Rx1day' | 'Rx3day' | 'Rx5day' | 'BasicStats';
+  values: number[];
+  result: number;
+  unit: string;
+  formula: string;
+  latexFormula: string;
+  steps: string[];
+  windows?: Array<{ window: number[]; sum: number; expression: string; isMax: boolean }>;
+  source: string;
+  warnings?: string[];
+  stats?: {
+    count: number;
+    mean: number;
+    median: number;
+    min: number;
+    max: number;
+    sum: number;
+    sd: number;
+    cv: number;
+  };
+}
+
+export function computeManualListCalculation(
+  values: number[],
+  index: 'Rx1day' | 'Rx3day' | 'Rx5day' | 'BasicStats' = 'Rx1day'
+): ManualListCalculationResult {
+  const cleanValues = values.filter((v) => !isNaN(v) && v !== null && v !== undefined);
+  const source = 'Manual User Input / Source: User Provided';
+
+  if (cleanValues.length === 0) {
+    throw new Error('لم يتم إدخال أي قيم رقمية صالحة.');
+  }
+
+  // Basic descriptive stats
+  const count = cleanValues.length;
+  const sum = cleanValues.reduce((s, x) => s + x, 0);
+  const mean = sum / count;
+  const sorted = [...cleanValues].sort((a, b) => a - b);
+  const median =
+    count % 2 === 0
+      ? (sorted[count / 2 - 1] + sorted[count / 2]) / 2
+      : sorted[Math.floor(count / 2)];
+  const min = sorted[0];
+  const max = sorted[sorted.length - 1];
+  const variance =
+    count > 1
+      ? cleanValues.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / (count - 1)
+      : 0;
+  const sd = Math.sqrt(variance);
+  const cv = mean > 0 ? (sd / mean) * 100 : 0;
+
+  if (index === 'Rx1day') {
+    const res = Math.max(...cleanValues);
+    return {
+      index: 'Rx1day',
+      values: cleanValues,
+      result: res,
+      unit: 'مم',
+      formula: `Rx1day = max(${cleanValues.join(', ')})`,
+      latexFormula: `Rx1\\text{day} = \\max_{i=1}^{n} (x_i)`,
+      steps: [
+        `القيم المدخلة: [${cleanValues.join(', ')}]`,
+        `تطبيق دالة القيمة العظمى: max(${cleanValues.join(', ')})`,
+        `النتيجة النهائية: Rx1day = ${res} مم`,
+      ],
+      source,
+      stats: { count, mean, median, min, max, sum, sd, cv },
+    };
+  }
+
+  if (index === 'Rx3day') {
+    if (cleanValues.length < 3) {
+      throw new Error('حساب Rx3day يتطلب 3 قيم متتالية على الأقل.');
+    }
+    const windows: Array<{ window: number[]; sum: number; expression: string; isMax: boolean }> = [];
+    let max3 = -Infinity;
+
+    for (let i = 0; i <= cleanValues.length - 3; i++) {
+      const w = [cleanValues[i], cleanValues[i + 1], cleanValues[i + 2]];
+      const wSum = w[0] + w[1] + w[2];
+      if (wSum > max3) max3 = wSum;
+      windows.push({
+        window: w,
+        sum: wSum,
+        expression: `${w[0]}+${w[1]}+${w[2]} = ${wSum}`,
+        isMax: false,
+      });
+    }
+
+    windows.forEach((w) => {
+      if (w.sum === max3) w.isMax = true;
+    });
+
+    const steps = [
+      `القيم المتتالية المدخلة: [${cleanValues.join(', ')}]`,
+      `فحص النوافذ المتحركة المتتالية لطول 3:`,
+      ...windows.map((w, idx) => `النافذة ${idx + 1}: ${w.expression} ${w.isMax ? '← (الحد الأقصى)' : ''}`),
+      `أعلى مجموع متتالي لثلاثة أيام: Rx3day = ${max3} مم`,
+    ];
+
+    return {
+      index: 'Rx3day',
+      values: cleanValues,
+      result: max3,
+      unit: 'مم',
+      formula: `Rx3day = max(x_i + x_{i+1} + x_{i+2})`,
+      latexFormula: `Rx3\\text{day} = \\max_{i=1}^{n-2} \\sum_{k=0}^{2} x_{i+k}`,
+      steps,
+      windows,
+      source,
+      stats: { count, mean, median, min, max, sum, sd, cv },
+    };
+  }
+
+  if (index === 'Rx5day') {
+    if (cleanValues.length < 5) {
+      throw new Error('حساب Rx5day يتطلب 5 قيم متتالية على الأقل.');
+    }
+    const windows: Array<{ window: number[]; sum: number; expression: string; isMax: boolean }> = [];
+    let max5 = -Infinity;
+
+    for (let i = 0; i <= cleanValues.length - 5; i++) {
+      const w = [
+        cleanValues[i],
+        cleanValues[i + 1],
+        cleanValues[i + 2],
+        cleanValues[i + 3],
+        cleanValues[i + 4],
+      ];
+      const wSum = w.reduce((s, x) => s + x, 0);
+      if (wSum > max5) max5 = wSum;
+      windows.push({
+        window: w,
+        sum: wSum,
+        expression: `${w.join('+')} = ${wSum}`,
+        isMax: false,
+      });
+    }
+
+    windows.forEach((w) => {
+      if (w.sum === max5) w.isMax = true;
+    });
+
+    const steps = [
+      `القيم المتتالية المدخلة: [${cleanValues.join(', ')}]`,
+      `فحص النوافذ المتحركة المتتالية لطول 5:`,
+      ...windows.map((w, idx) => `النافذة ${idx + 1}: ${w.expression} ${w.isMax ? '← (الحد الأقصى)' : ''}`),
+      `أعلى مجموع متتالي لخمسة أيام: Rx5day = ${max5} مم`,
+    ];
+
+    return {
+      index: 'Rx5day',
+      values: cleanValues,
+      result: max5,
+      unit: 'مم',
+      formula: `Rx5day = max(x_i + x_{i+1} + x_{i+2} + x_{i+3} + x_{i+4})`,
+      latexFormula: `Rx5\\text{day} = \\max_{i=1}^{n-4} \\sum_{k=0}^{4} x_{i+k}`,
+      steps,
+      windows,
+      source,
+      stats: { count, mean, median, min, max, sum, sd, cv },
+    };
+  }
+
+  // BasicStats
+  return {
+    index: 'BasicStats',
+    values: cleanValues,
+    result: mean,
+    unit: 'مم',
+    formula: `المتوسط الحسابي = Σx / n = ${sum.toFixed(1)} / ${count}`,
+    latexFormula: `\\bar{x} = \\frac{1}{n} \\sum_{i=1}^{n} x_i`,
+    steps: [
+      `عدد العينات n = ${count}`,
+      `المجموع الإجمالي = ${sum.toFixed(1)} مم`,
+      `المتوسط الحسابي = ${mean.toFixed(2)} مم`,
+      `الوسيط = ${median.toFixed(2)} مم`,
+      `أقل قيمة = ${min.toFixed(2)} مم`,
+      `أعلى قيمة = ${max.toFixed(2)} مم`,
+      `الانحراف المعياري = ${sd.toFixed(2)} مم`,
+      `معامل الاختلاف CV = ${cv.toFixed(1)}%`,
+    ],
+    source,
+    stats: { count, mean, median, min, max, sum, sd, cv },
+  };
+}
+
+export interface ManualAMSCalculationResult {
+  series: Array<{ year: number; annual_max_mm: number }>;
+  n_years: number;
+  gev: ModelFitResult;
+  gumbel: ModelFitResult;
+  selectedModel: 'Gumbel' | 'GEV';
+  returnLevels: ReturnLevelRecord[];
+  gof: GoodnessOfFitReport;
+  warnings: string[];
+  source: string;
+}
+
+export function computeManualAMSSeriesCalculation(
+  rows: Array<{ year: number; annual_max_mm: number }>,
+  seed: number = 42
+): ManualAMSCalculationResult {
+  const cleanRows = rows
+    .filter((r) => r.year > 0 && r.annual_max_mm >= 0 && !isNaN(r.annual_max_mm))
+    .sort((a, b) => a.year - b.year);
+
+  if (cleanRows.length < 3) {
+    throw new Error('تحليل سلسلة القيم القصوى السنوية (AMS) يتطلب 3 سنوات على الأقل.');
+  }
+
+  const values = cleanRows.map((r) => r.annual_max_mm);
+  const n = values.length;
+  const source = 'Manual User Input / Source: User Provided';
+
+  const gev = fitGEVLMoments(values, 'MANUAL_STN', 'Rx1day');
+  const gumbel = fitGumbelLMoments(values, 'MANUAL_STN', 'Rx1day');
+
+  // Model selection (AIC)
+  const selectedModel = gumbel.aic <= gev.aic ? 'Gumbel' : 'GEV';
+  const bestFit = selectedModel === 'Gumbel' ? gumbel : gev;
+  const gof = computeGoodnessOfFit(values, bestFit);
+
+  const tPeriods = [2, 5, 10, 25, 50, 100];
+  const returnLevels = computeReturnLevelsWithBootstrap(values, bestFit, tPeriods, 1000, seed);
+
+  const warnings: string[] = [];
+  if (n < 10) {
+    warnings.push(
+      `سلسلة AMS تحتوي على ${n} سنوات فقط. التحليل استكشافي فقط (Exploratory) وغير مناسب للاعتماد التصميمي النهائي.`
+    );
+  }
+
+  return {
+    series: cleanRows,
+    n_years: n,
+    gev,
+    gumbel,
+    selectedModel,
+    returnLevels,
+    gof,
+    warnings,
+    source,
+  };
+}
+
