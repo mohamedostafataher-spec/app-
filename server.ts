@@ -17,7 +17,9 @@ import {
   fitGEVLMoments, 
   fitGumbelLMoments, 
   computeGoodnessOfFit, 
-  computeReturnLevelsWithBootstrap 
+  computeReturnLevelsWithBootstrap,
+  analyzeStormEvent,
+  generateStepByStepSubstitution
 } from './src/utils/statisticalEngine';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -26,13 +28,13 @@ const __dirname = path.dirname(__filename);
 // 1. Initialize Firebase Admin
 const firebaseConfig = JSON.parse(fs.readFileSync('./firebase-applet-config.json', 'utf8'));
 
-if (!getApps().length) {
-  initializeApp({
-    projectId: firebaseConfig.projectId,
-  });
-}
+const firebaseApp = getApps().length
+  ? getApps()[0]
+  : initializeApp({
+      projectId: firebaseConfig.projectId,
+    });
 
-const db = getFirestore(undefined, firebaseConfig.firestoreDatabaseId || '(default)');
+const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId || '(default)');
 const projectsCol = db.collection('projects');
 
 async function startServer() {
@@ -94,38 +96,57 @@ async function startServer() {
       // This is normally where we'd call the Python engine.
       // Here we use our robust JS engine on the "server side".
       
-      const qc = computeDataQuality(records, 90);
+      const threshold = parameters?.completenessThreshold || 90;
+      const qc = computeDataQuality(records, threshold);
       const annualTotals = qc.annual_completeness.map(ac => ({
         year: ac.year,
         total_mm: records.filter((r: any) => r.date.startsWith(String(ac.year))).reduce((s: number, r: any) => s + (r.rainfall_mm || 0), 0)
       }));
       const homogeneity = computeHomogeneityAndTrend(annualTotals, 'STN', stationId || 'STN');
       const characterization = computeRainfallCharacterization(records, 1.0);
-      const indices = computeExtremeIndices(records, 90);
+      const indices = computeExtremeIndices(records, threshold);
       const ams = buildAnnualMaximumSeries(indices.rx1day);
+      const ams3 = buildAnnualMaximumSeries(indices.rx3day);
+      const ams5 = buildAnnualMaximumSeries(indices.rx5day);
       const fitValues = ams.filter(a => a.eligible_for_model).map(a => a.maximum_value_mm);
       
       let models = null;
       let returnLevels = null;
+      let stepByStep = null;
       
       if (fitValues.length >= 5) {
         const gev = fitGEVLMoments(fitValues, 'STN', 'Rx1day');
         const gumbel = fitGumbelLMoments(fitValues, 'STN', 'Rx1day');
         const bestModel = gev.aic < gumbel.aic ? gev : gumbel;
         const gof = computeGoodnessOfFit(fitValues, bestModel);
-        const rl = computeReturnLevelsWithBootstrap(fitValues, bestModel, [2, 5, 10, 25, 50, 100], 1000);
+        const rl = computeReturnLevelsWithBootstrap(fitValues, bestModel, [2, 5, 10, 25, 50, 100], 1000, 95, parameters?.seed || 42);
         
         models = { gev, gumbel, best: bestModel, gof };
         returnLevels = rl;
+        stepByStep = generateStepByStepSubstitution('return_level', {
+          model: bestModel.model,
+          mu: bestModel.mu,
+          sigma: bestModel.sigma,
+          xi: bestModel.xi,
+          T: 100,
+          dataSource: 'سلسلة AMS السنوية المؤهلة'
+        });
       }
+
+      const stormDaniel = analyzeStormEvent(records, 'عاصفة دانيال', '2023-09-08', '2023-09-12');
 
       const results = {
         qc,
         homogeneity,
         characterization,
         indices: ams,
+        indices_rx3day: ams3,
+        indices_rx5day: ams5,
+        storm_daniel: stormDaniel,
         models,
         return_levels: returnLevels,
+        step_by_step: stepByStep,
+        nYears: fitValues.length,
         canModel: fitValues.length >= 5
       };
 

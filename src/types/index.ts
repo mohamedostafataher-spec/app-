@@ -99,6 +99,19 @@ export interface HourlyRecord {
   source: string;
 }
 
+export interface CalendarAnalysis {
+  calendar_span_days: number;
+  rows_supplied: number;
+  coverage_percentage: number;
+  calendar_gaps_count: number;
+  longest_gap_days: number;
+  missing_calendar_days: number;
+  quality_status: 'Good' | 'Needs Review' | 'Not Suitable';
+  status_reasons: string[];
+  duplicate_dates_count: number;
+  duplicate_dates: string[];
+}
+
 export interface YearCompleteness {
   year: number;
   expected_records: number;
@@ -106,6 +119,7 @@ export interface YearCompleteness {
   missing_records: number;
   completeness_percentage: number;
   eligible_for_ams: boolean;
+  exclusion_reason?: string;
   warning?: string;
 }
 
@@ -123,6 +137,7 @@ export interface QualityReport {
   longest_missing_gap_days: number;
   min_rainfall: number;
   max_rainfall: number;
+  calendar_analysis?: CalendarAnalysis;
   suspected_outliers: Array<{
     date: string;
     value: number;
@@ -246,6 +261,8 @@ export interface ModelFitResult {
   index_name: 'Rx1day' | 'Rx3day' | 'Rx5day';
   model: 'GEV' | 'Gumbel';
   method: 'MLE' | 'L-Moments';
+  estimation_method?: string;
+  convergence_status?: string;
   n_observations: number;
   mu: number;     // location
   sigma: number;  // scale (must be > 0)
@@ -277,6 +294,14 @@ export interface GoodnessOfFitReport {
   recommended: boolean;
   decision_reason_ar: string;
   decision_reason_en: string;
+  detailed_tests?: Array<{
+    test_name: string;
+    statistic: number;
+    p_value_or_method: string;
+    decision: string;
+    interpretation: string;
+    warning?: string;
+  }>;
 }
 
 export interface ReturnLevelRecord {
@@ -288,10 +313,26 @@ export interface ReturnLevelRecord {
   lower_ci_mm: number;
   upper_ci_mm: number;
   confidence_level: number;
-  method: 'Parametric Bootstrap (5000 replications)';
+  method: string;
+  replications?: number;
+  successful_replications?: number;
+  failed_replications?: number;
+  random_seed?: number;
   n_years: number;
   extrapolation_warning: boolean;
   extrapolation_message?: string;
+}
+
+export interface CalculationStepExplanation {
+  title_ar: string;
+  general_formula: string;
+  latex_formula: string;
+  parameters: Array<{ name: string; symbol: string; value: number | string; unit?: string; description_ar: string }>;
+  numerical_substitution: string;
+  final_result: string | number;
+  unit: string;
+  data_source: string;
+  warnings?: string[];
 }
 
 export interface StormEvent {

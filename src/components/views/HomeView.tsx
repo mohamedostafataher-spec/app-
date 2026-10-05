@@ -1,7 +1,7 @@
 /**
  * منصة مصر لتحليل الأمطار القصوى والمخاطر المطرية
- * إعداد وملكية علمية: د. أمل معتوق — Dr. Amal Matouk
- * Home Page (الرئيسية: رفع الملف وشرح بسيط)
+ * إعداد وتدقيق: د. أمل معتوق — Dr. Amal Matouk
+ * Home Page (الرئيسية: الهوية البصرية والترحيبية ورفع الملفات)
  */
 
 import React, { useState } from 'react';
@@ -19,7 +19,7 @@ import {
   Sparkles,
   BarChart3,
   Calendar,
-  HelpCircle,
+  Compass,
 } from 'lucide-react';
 import { DailyRecord, Language, StationMetadata } from '../../types';
 import { DEMO_DAILY_RECORDS, DEMO_STATIONS } from '../../data/demoData';
@@ -182,51 +182,62 @@ export const HomeView: React.FC<HomeViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto py-4">
+    <div className="space-y-6 max-w-4xl mx-auto py-6 px-3 sm:px-0">
       {/* Hero Welcome Banner */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm text-center relative overflow-hidden">
-        <div className="max-w-2xl mx-auto space-y-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-            <Award className="w-3.5 h-3.5 text-amber-600" />
-            <span>إعداد وملكية علمية: د. أمل معتوق — Dr. Amal Matouk</span>
+      <div className="bg-gradient-to-br from-[#12304A] via-[#0E7490] to-[#168A8A] text-white rounded-3xl p-6 sm:p-10 shadow-xl relative overflow-hidden border border-[#D7B98E]/30">
+        {/* Background abstract water lines / contour effect */}
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#D7B98E_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+
+        <div className="relative z-10 max-w-2xl mx-auto text-center space-y-4">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#D7B98E]/20 text-[#D7B98E] border border-[#D7B98E]/40 backdrop-blur-xs">
+            <Award className="w-4 h-4 text-[#C8943E]" />
+            <span>{isAr ? 'إعداد وتدقيق: د. أمل معتوق — Dr. Amal Matouk' : 'Scientific Lead: Dr. Amal Matouk'}</span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight">
             {isAr
               ? 'منصة مصر لتحليل الأمطار القصوى والمخاطر المطرية'
-              : 'Egypt Rainfall Extremes & Storm Analytics Platform'}
+              : 'Egypt Rainfall Extremes Platform'}
           </h1>
 
-          <p className="text-sm text-slate-600 leading-relaxed">
+          <p className="text-sm sm:text-base text-[#F4EBDD] font-medium leading-relaxed">
             {isAr
-              ? 'ارفع بيانات المطر اليومية لمحطتك، وابدأ التحليل الهيدرولوجي المتكامل (جودة، تجانس، مؤشرات قصوى، ملاءمة GEV/Gumbel، وفترات الرجوع) في شاشة تفاعلية مبسطة مستوحاة من بيئة RStudio بدون كود.'
-              : 'Upload your daily rainfall records and perform complete extreme value analysis (GEV/Gumbel, GoF, Return Levels) in an intuitive RStudio-like workspace with zero code.'}
+              ? '«تقرأ المطر فوق خريطة مصر، وتحول البيانات المناخية إلى معرفة وقرار.»'
+              : '“Reading rainfall across Egypt’s geography, turning climate data into knowledge and decisions.”'}
+          </p>
+
+          <p className="text-xs sm:text-sm text-cyan-100/90 leading-relaxed">
+            {isAr
+              ? 'منصة علمية بيئية جغرافية متكاملة لتحليل السجلات اليومية، فحص التجانس (Pettitt)، نمذجة القيم القصوى (GEV/Gumbel)، وتقييم مخاطر السيول وحماية البنية التحتية.'
+              : 'Integrated hydrological platform for daily records, Pettitt homogeneity, GEV/Gumbel extreme value modeling, and flash flood risk assessment.'}
           </p>
         </div>
       </div>
 
       {/* Main Upload Box */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-5">
-        <div className="text-center space-y-1">
-          <h2 className="text-lg font-bold text-slate-800 flex items-center justify-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-blue-600" />
-            <span>{isAr ? 'ارفع بيانات المطر اليومية' : 'Upload Daily Rainfall Data'}</span>
+      <div className="bg-white border border-[#D7B98E]/50 rounded-3xl p-6 sm:p-8 shadow-md space-y-6">
+        <div className="text-center space-y-1.5">
+          <div className="w-12 h-12 rounded-2xl bg-[#F7F3E8] border border-[#D7B98E]/60 text-[#0E7490] flex items-center justify-center mx-auto shadow-xs">
+            <FileSpreadsheet className="w-6 h-6" />
+          </div>
+          <h2 className="text-lg sm:text-xl font-bold text-[#1D2939]">
+            {isAr ? 'ارفع بيانات المطر اليومية لمحطتك' : 'Upload Station Rainfall Data'}
           </h2>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[#667085]">
             {isAr
-              ? 'يدعم ملفات Excel (.xlsx, .xls) و CSV بعمودين: التاريخ وكمية المطر اليومي (مم)'
-              : 'Supports Excel (.xlsx, .xls) and CSV with 2 columns: Date and Daily Rainfall (mm)'}
+              ? 'يدعم ملفات Excel (.xlsx, .xls) و CSV بعمودين رئيسيين: التاريخ (YYYY-MM-DD) وكمية المطر اليومي (مم)'
+              : 'Supports Excel (.xlsx, .xls) and CSV with Date and Rainfall (mm)'}
           </p>
         </div>
 
         {/* Drag and Drop Zone */}
-        <label className="border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50/70 hover:bg-slate-50 rounded-2xl p-8 text-center cursor-pointer transition-all block group">
-          <Upload className="w-10 h-10 text-blue-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-          <span className="text-sm font-bold text-slate-700 block">
-            {isAr ? 'اضغط هنا لاختيار ملف Excel أو CSV من جهازك' : 'Click to select Excel or CSV file'}
+        <label className="border-2 border-dashed border-[#D7B98E] hover:border-[#0E7490] bg-[#F7F3E8]/40 hover:bg-[#F7F3E8]/80 rounded-2xl p-8 text-center cursor-pointer transition-all block group">
+          <Upload className="w-10 h-10 text-[#0E7490] mx-auto mb-3 group-hover:scale-110 transition-transform" />
+          <span className="text-sm font-bold text-[#1D2939] block">
+            {isAr ? 'اضغط هنا لاختيار ملف البيانات (Excel أو CSV)' : 'Click to select data file (Excel or CSV)'}
           </span>
-          <span className="text-xs text-slate-400 block mt-1">
-            {isAr ? 'تتم المعالجة فورياً داخل متصفحك وبأمان تام دون إرسال البيانات لأي سيرفر' : 'Processed securely in-browser'}
+          <span className="text-xs text-[#667085] block mt-1">
+            {isAr ? 'تتم المعالجة آمنة ومحلية 100% داخل المتصفح' : 'Processed securely 100% in-browser'}
           </span>
           <input
             type="file"
@@ -244,47 +255,53 @@ export const HomeView: React.FC<HomeViewProps> = ({
         )}
 
         {/* Quick Demo Button */}
-        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <span className="text-xs text-slate-500">{isAr ? 'أو يمكنك التجربة فوراً:' : 'Or test immediately:'}</span>
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 border-t border-slate-100">
+          <span className="text-xs text-[#667085]">{isAr ? 'أو ابدأ مباشرة بالبيانات المرجعية المدمجة:' : 'Or start instantly with built-in reference data:'}</span>
           <button
             onClick={handleUseDemo}
-            className="w-full sm:w-auto px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            className="w-full sm:w-auto px-5 py-2.5 bg-[#F7F3E8] hover:bg-[#F4EBDD] text-[#1D2939] rounded-xl text-xs font-bold border border-[#D7B98E] flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
-            <span>{isAr ? 'استخدام بيانات تجريبية (محطة الإسكندرية 30 سنة)' : 'Use Alexandria Demo Dataset'}</span>
+            <RefreshCw className="w-3.5 h-3.5 text-[#0E7490]" />
+            <span>{isAr ? 'تحميل محطة الإسكندرية النموذجية (1957 - 2023)' : 'Load Alexandria Reference Station'}</span>
           </button>
         </div>
       </div>
 
       {/* 3 Steps Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 text-center space-y-1">
-          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center mx-auto mb-1">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-[#D7B98E]/40 text-center space-y-2 shadow-xs">
+          <div className="w-9 h-9 rounded-xl bg-[#0E7490]/10 text-[#0E7490] font-extrabold text-sm flex items-center justify-center mx-auto border border-[#0E7490]/20">
             1
           </div>
-          <h3 className="font-bold text-slate-800 text-xs">{isAr ? 'رفع وتدقيق البيانات' : 'Upload & Quality Check'}</h3>
-          <p className="text-[11px] text-slate-500 leading-snug">
-            {isAr ? 'فحص السجلات الناقصة، القيم السالبة، واختبار تجانس Pettitt.' : 'Missing values, negative checks, and Pettitt test.'}
+          <h3 className="font-bold text-[#1D2939] text-xs sm:text-sm">
+            {isAr ? 'فحص الجودة والتجانس' : 'Quality & Homogeneity'}
+          </h3>
+          <p className="text-[11px] text-[#667085] leading-relaxed">
+            {isAr ? 'كشف الفجوات الزمنية، القيم السالبة، واختبار Pettitt للتجانس المناخي.' : 'Gap inspection, negative check, and Pettitt test.'}
           </p>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 text-center space-y-1">
-          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center mx-auto mb-1">
+        <div className="bg-white p-5 rounded-2xl border border-[#D7B98E]/40 text-center space-y-2 shadow-xs">
+          <div className="w-9 h-9 rounded-xl bg-[#0E7490]/10 text-[#0E7490] font-extrabold text-sm flex items-center justify-center mx-auto border border-[#0E7490]/20">
             2
           </div>
-          <h3 className="font-bold text-slate-800 text-xs">{isAr ? 'نمذجة القيم القصوى' : 'Extreme Value Modeling'}</h3>
-          <p className="text-[11px] text-slate-500 leading-snug">
-            {isAr ? 'ملاءمة GEV وGumbel بحسابات L-Moments واختبار جودة الملاءمة KS.' : 'GEV & Gumbel fitting via L-Moments.'}
+          <h3 className="font-bold text-[#1D2939] text-xs sm:text-sm">
+            {isAr ? 'نمذجة القيم القصوى' : 'Extreme Value Modeling'}
+          </h3>
+          <p className="text-[11px] text-[#667085] leading-relaxed">
+            {isAr ? 'حساب مؤشرات Rx وتوزيعات GEV و Gumbel مع اختبارات جودة الملاءمة KS و AD.' : 'Rx indices and GEV/Gumbel goodness-of-fit.'}
           </p>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 text-center space-y-1">
-          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 font-bold text-xs flex items-center justify-center mx-auto mb-1">
+        <div className="bg-white p-5 rounded-2xl border border-[#D7B98E]/40 text-center space-y-2 shadow-xs">
+          <div className="w-9 h-9 rounded-xl bg-[#0E7490]/10 text-[#0E7490] font-extrabold text-sm flex items-center justify-center mx-auto border border-[#0E7490]/20">
             3
           </div>
-          <h3 className="font-bold text-slate-800 text-xs">{isAr ? 'فترات الرجوع والتقارير' : 'Return Levels & Reports'}</h3>
-          <p className="text-[11px] text-slate-500 leading-snug">
-            {isAr ? 'حساب مطر الـ 100 سنة وفترات الثقة 95% وتصدير التقرير PDF.' : '100-yr return level, 95% CI, and PDF export.'}
+          <h3 className="font-bold text-[#1D2939] text-xs sm:text-sm">
+            {isAr ? 'فترات الرجوع وتصدير PDF' : 'Return Levels & Reports'}
+          </h3>
+          <p className="text-[11px] text-[#667085] leading-relaxed">
+            {isAr ? 'حساب مطر 100 سنة، فترات الثقة 95% بـ Bootstrap، وتصدير التقارير المعتمدة.' : '100-yr return levels, 95% CI, and PDF export.'}
           </p>
         </div>
       </div>

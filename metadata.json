@@ -1,7 +1,6 @@
 {
-  "name": "منصة تحليل الأمطار القصوى",
-  "description": "منصة احترافية متكاملة لتحليل الأمطار القصوى تعتمد على محرك إحصائي متقدم (GEV/Gumbel) مع بنية Backend سحابية تدعم التحليلات الهيدرولوجية المكثفة والتحقق العلمي Bootstrap.",
+  "name": "منصة مصر لتحليل الأمطار القصوى والمخاطر المطرية",
+  "description": "Egypt Rainfall Extremes Platform — منصة مصر لتحليل الأمطار القصوى والمخاطر المطرية. تقرأ المطر فوق خريطة مصر، وتحول البيانات المناخية إلى معرفة وقرار. إعداد وتدقيق: د. أمل معتوق",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
-

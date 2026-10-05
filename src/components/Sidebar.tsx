@@ -99,36 +99,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed md:sticky top-0 h-screen z-50 md:z-10 w-72 bg-slate-900 border-l border-slate-800 flex flex-col transition-transform duration-200 ease-in-out ${
+        className={`fixed md:sticky top-0 h-screen z-50 md:z-10 w-72 bg-white border-l border-[#D7B98E]/50 flex flex-col transition-transform duration-200 ease-in-out shadow-lg ${
           isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
         }`}
       >
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="p-4 border-b border-[#D7B98E]/30 flex items-center justify-between bg-[#F7F3E8]/85">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#0E7490] to-[#12304A] flex items-center justify-center text-white font-bold text-sm shadow-md border border-[#D7B98E]/40">
               م
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white leading-tight">
+              <h2 className="text-sm font-bold text-[#1D2939] leading-tight">
                 {isAr ? 'منصة مصر الهيدرولوجية' : 'Egypt Hydro Analytics'}
               </h2>
-              <p className="text-[10px] text-cyan-400 font-medium">
-                {isAr ? '4 أقسام رئيسية مبسطة' : '4 Main Core Modules'}
+              <p className="text-[10px] text-[#0E7490] font-semibold">
+                {isAr ? 'الأقسام والمحاور الرئيسية' : 'Core Analytics Modules'}
               </p>
             </div>
           </div>
           <button
             onClick={() => setIsOpen(false)}
-            className="md:hidden text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+            className="md:hidden text-slate-500 hover:text-slate-900 p-1 rounded-lg hover:bg-[#F4EBDD]"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Navigation List — Exactly 4 items */}
-        <div className="flex-1 p-3 space-y-2 overflow-y-auto">
-          <div className="px-2 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+        <div className="flex-1 p-3 space-y-2.5 overflow-y-auto bg-[#F7F9FA]">
+          <div className="px-2 py-1 text-[11px] font-bold text-[#667085] uppercase tracking-wider">
             {isAr ? 'القوائم الأربعة الأساسية' : 'Core Navigation'}
           </div>
 
@@ -145,15 +145,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }}
                 className={`w-full text-right p-3 rounded-xl transition-all flex items-start gap-3 border cursor-pointer ${
                   isActive
-                    ? 'bg-gradient-to-r from-cyan-950/70 to-slate-800/90 border-cyan-500/50 shadow-lg shadow-cyan-950/30 text-white'
-                    : 'bg-slate-850/50 hover:bg-slate-800/70 border-slate-800/80 text-slate-300 hover:text-white'
+                    ? 'bg-gradient-to-r from-[#0E7490]/10 to-[#12304A]/10 border-[#0E7490] shadow-md shadow-[#0E7490]/10 text-[#1D2939]'
+                    : 'bg-white hover:bg-[#F7F3E8]/50 border-slate-200 text-[#1D2939] hover:text-black'
                 }`}
               >
                 <div
                   className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
                     isActive
-                      ? 'bg-cyan-500 text-slate-950 font-bold'
-                      : 'bg-slate-800 text-slate-400'
+                      ? 'bg-[#0E7490] text-white font-bold shadow-xs'
+                      : 'bg-[#F7F3E8] text-[#0E7490]'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -163,18 +163,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <div className="flex items-center justify-between gap-1 mb-0.5">
                     <span
                       className={`text-xs font-bold truncate ${
-                        isActive ? 'text-white' : 'text-slate-200'
+                        isActive ? 'text-[#0E7490]' : 'text-slate-900'
                       }`}
                     >
                       {isAr ? item.labelAr : item.labelEn}
                     </span>
                     <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full border font-semibold ${item.badgeColor}`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full border font-semibold ${item.badgeColor}`}
                     >
                       {item.badge}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+                  <p className="text-[11px] text-[#667085] line-clamp-2 leading-relaxed">
                     {isAr ? item.descAr : item.descEn}
                   </p>
                 </div>
@@ -184,19 +184,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Scientific Ownership & Branding Footer */}
-        <div className="p-3.5 border-t border-slate-800 bg-slate-950/60">
-          <div className="bg-slate-900/90 border border-amber-500/30 rounded-xl p-3 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-amber-400 text-xs font-bold">
+        <div className="p-3.5 border-t border-[#D7B98E]/40 bg-[#F7F3E8]">
+          <div className="bg-white border border-[#D7B98E]/60 rounded-xl p-3 space-y-1.5 shadow-xs">
+            <div className="flex items-center gap-1.5 text-[#C8943E] text-xs font-bold">
               <Award className="w-3.5 h-3.5 flex-shrink-0" />
               <span>{isAr ? 'الملكية والمنهجية العلمية' : 'Scientific Pedigree'}</span>
             </div>
-            <p className="text-xs font-semibold text-slate-200">
-              {isAr ? 'د. أمل معتوق' : 'Dr. Amal Matouk'}
+            <p className="text-xs font-bold text-[#1D2939]">
+              {isAr ? 'إعداد وتدقيق: د. أمل معتوق' : 'Dr. Amal Matouk'}
             </p>
-            <p className="text-[10px] text-slate-400 leading-tight">
+            <p className="text-[10px] text-[#667085] leading-tight">
               {isAr
-                ? 'تحليل إحصائي دقيق بدون كود وبطريقة L-moments و Bootstrap المعتمدة عالمياً.'
-                : 'Hydrological extremes analysis without code.'}
+                ? 'تقرأ المطر فوق خريطة مصر، وتحول البيانات المناخية إلى معرفة وقرار.'
+                : 'Transforming climate data into actionable decisions.'}
             </p>
           </div>
         </div>

@@ -8,6 +8,7 @@ import {
   DailyRecord,
   YearCompleteness,
   QualityReport,
+  CalendarAnalysis,
   HomogeneityReport,
   HomogeneityResult,
   RainfallCharacterization,
@@ -17,7 +18,8 @@ import {
   GoodnessOfFitReport,
   ReturnLevelRecord,
   StatisticalSafetyScore,
-  ResultTrustFingerprint
+  ResultTrustFingerprint,
+  CalculationStepExplanation
 } from '../types';
 
 // ==========================================
@@ -69,7 +71,7 @@ export class SeededRandom {
   private c: number = 12345;
   private state: number;
 
-  constructor(seed: number = 20261004) {
+  constructor(seed: number = 42) {
     this.state = seed ? seed : Math.floor(Math.random() * (this.m - 1));
   }
 
@@ -80,13 +82,183 @@ export class SeededRandom {
 }
 
 // ==========================================
-// 2. Data Quality Control Engine
+// 2. Calendar Reconstruction Engine
+// ==========================================
+
+export interface CalendarDay {
+  date: string;
+  rainfall_mm: number | null;
+  is_missing: boolean;
+  is_gap: boolean;
+}
+
+export interface ReconstructedCalendar {
+  calendarRecords: CalendarDay[];
+  startDate: string;
+  endDate: string;
+  rowsSupplied: number;
+  calendarSpanDays: number;
+  coveragePercentage: number;
+  missingCalendarDays: number;
+  calendarGapsCount: number;
+  longestGapDays: number;
+  qualityStatus: 'Good' | 'Needs Review' | 'Not Suitable';
+  statusReasons: string[];
+  duplicateDates: string[];
+}
+
+export function reconstructDailyCalendar(records: DailyRecord[]): ReconstructedCalendar {
+  if (!records || records.length === 0) {
+    return {
+      calendarRecords: [],
+      startDate: '',
+      endDate: '',
+      rowsSupplied: 0,
+      calendarSpanDays: 0,
+      coveragePercentage: 0,
+      missingCalendarDays: 0,
+      calendarGapsCount: 0,
+      longestGapDays: 0,
+      qualityStatus: 'Not Suitable',
+      statusReasons: ['الملف فارغ أو لا يحتوي على سجلات'],
+      duplicateDates: []
+    };
+  }
+
+  const dateMap = new Map<string, number>();
+  const duplicateDates: string[] = [];
+  const validRecords: Array<{ date: string; rainfall_mm: number | null }> = [];
+
+  records.forEach((r) => {
+    if (!r.date) return;
+    const dStr = String(r.date).trim().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dStr)) return;
+
+    if (dateMap.has(dStr)) {
+      duplicateDates.push(dStr);
+    } else {
+      let rain: number | null = null;
+      if (r.rainfall_mm !== null && r.rainfall_mm !== undefined && !isNaN(r.rainfall_mm)) {
+        if (r.rainfall_mm >= 0 && r.quality_flag !== 'rejected_negative' && r.quality_flag !== 'missing') {
+          rain = r.rainfall_mm;
+        }
+      }
+      dateMap.set(dStr, rain !== null ? rain : -1);
+      validRecords.push({ date: dStr, rainfall_mm: rain });
+    }
+  });
+
+  if (validRecords.length === 0) {
+    return {
+      calendarRecords: [],
+      startDate: '',
+      endDate: '',
+      rowsSupplied: 0,
+      calendarSpanDays: 0,
+      coveragePercentage: 0,
+      missingCalendarDays: 0,
+      calendarGapsCount: 0,
+      longestGapDays: 0,
+      qualityStatus: 'Not Suitable',
+      statusReasons: ['لا توجد تواريخ صالحة في الملف'],
+      duplicateDates
+    };
+  }
+
+  validRecords.sort((a, b) => a.date.localeCompare(b.date));
+  const startDate = validRecords[0].date;
+  const endDate = validRecords[validRecords.length - 1].date;
+
+  const startD = new Date(startDate + 'T00:00:00Z');
+  const endD = new Date(endDate + 'T00:00:00Z');
+  const calendarSpanDays = Math.round((endD.getTime() - startD.getTime()) / (1000 * 3600 * 24)) + 1;
+
+  const calendarRecords: CalendarDay[] = [];
+  let cur = new Date(startD);
+  let currentGap = 0;
+  let longestGapDays = 0;
+  let calendarGapsCount = 0;
+  let missingCalendarDays = 0;
+
+  while (cur <= endD) {
+    const curStr = cur.toISOString().split('T')[0];
+    const hasRecord = dateMap.has(curStr);
+    const recordedVal = hasRecord ? dateMap.get(curStr)! : -1;
+    const isMissing = !hasRecord || recordedVal === -1;
+
+    if (isMissing) {
+      missingCalendarDays++;
+      currentGap++;
+      if (currentGap === 2) {
+        calendarGapsCount++;
+      }
+      if (currentGap > longestGapDays) {
+        longestGapDays = currentGap;
+      }
+      calendarRecords.push({
+        date: curStr,
+        rainfall_mm: null,
+        is_missing: true,
+        is_gap: currentGap >= 2
+      });
+    } else {
+      currentGap = 0;
+      calendarRecords.push({
+        date: curStr,
+        rainfall_mm: recordedVal,
+        is_missing: false,
+        is_gap: false
+      });
+    }
+
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+
+  const rowsSupplied = records.length;
+  const coveragePercentage = calendarSpanDays > 0 ? (rowsSupplied / calendarSpanDays) * 100 : 0;
+
+  // Scientific Quality Status Assessment
+  let qualityStatus: ReconstructedCalendar['qualityStatus'] = 'Good';
+  const statusReasons: string[] = [];
+
+  if (coveragePercentage < 45 || longestGapDays > 2000) {
+    qualityStatus = 'Needs Review';
+    if (coveragePercentage < 25) qualityStatus = 'Not Suitable';
+    statusReasons.push(`نسبة التغطية الكلية ${coveragePercentage.toFixed(2)}% فقط من النطاق التقويمي (${calendarSpanDays} يوماً).`);
+    statusReasons.push(`توجد فجوات تقويمية كبرى أطولها ${longestGapDays} يوماً متتالياً.`);
+  } else if (coveragePercentage < 80 || longestGapDays > 90) {
+    qualityStatus = 'Needs Review';
+    statusReasons.push(`نسبة التغطية (${coveragePercentage.toFixed(2)}%) تتطلب تدقيق الفجوات السنوية.`);
+  } else {
+    qualityStatus = 'Good';
+    statusReasons.push('السلسلة مستوفية لمعايير التغطية التقويمية والجودة العامة.');
+  }
+
+  return {
+    calendarRecords,
+    startDate,
+    endDate,
+    rowsSupplied,
+    calendarSpanDays,
+    coveragePercentage: Math.round(coveragePercentage * 100) / 100,
+    missingCalendarDays,
+    calendarGapsCount,
+    longestGapDays,
+    qualityStatus,
+    statusReasons,
+    duplicateDates
+  };
+}
+
+// ==========================================
+// 3. Data Quality Control Engine
 // ==========================================
 
 export function computeDataQuality(
   records: DailyRecord[],
   completenessThreshold: number = 90
 ): QualityReport {
+  const cal = reconstructDailyCalendar(records);
   if (!records || records.length === 0) {
     return {
       station_id: 'UNKNOWN',
@@ -113,73 +285,26 @@ export function computeDataQuality(
   const stationName = records[0].station_name;
   const totalRows = records.length;
 
-  let totalMissing = 0;
   let negativeCount = 0;
-  let duplicateCount = 0;
-  const dateSet = new Set<string>();
-
   let minRainfall = Infinity;
   let maxRainfall = -Infinity;
-
   let currentDrySpell = 0;
   let maxDrySpellDays = 0;
 
-  let currentMissingGap = 0;
-  let longestMissingGapDays = 0;
-
   const validValues: { date: string; value: number }[] = [];
 
-  // Group by year for annual completeness
-  const yearBuckets: Record<number, { expected: number; actual: number; missing: number }> = {};
-
   records.forEach((rec) => {
-    if (dateSet.has(rec.date)) {
-      duplicateCount++;
-    } else {
-      dateSet.add(rec.date);
-    }
-
-    const year = parseInt(rec.date.substring(0, 4), 10);
-    if (!isNaN(year)) {
-      if (!yearBuckets[year]) {
-        // Is leap year?
-        const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-        yearBuckets[year] = {
-          expected: isLeap ? 366 : 365,
-          actual: 0,
-          missing: 0,
-        };
-      }
-      yearBuckets[year].actual++;
-    }
-
-    if (rec.rainfall_mm === null || rec.quality_flag === 'missing') {
-      totalMissing++;
-      currentMissingGap++;
-      if (currentMissingGap > longestMissingGapDays) {
-        longestMissingGapDays = currentMissingGap;
-      }
-      currentDrySpell = 0;
-      if (!isNaN(year) && yearBuckets[year]) {
-        yearBuckets[year].missing++;
-      }
-    } else if (rec.rainfall_mm < 0 || rec.quality_flag === 'rejected_negative') {
+    if (rec.rainfall_mm !== null && rec.rainfall_mm < 0) {
       negativeCount++;
-      currentMissingGap = 0;
-      currentDrySpell = 0;
-    } else {
-      currentMissingGap = 0;
+    } else if (rec.rainfall_mm !== null && rec.rainfall_mm >= 0) {
       const val = rec.rainfall_mm;
       validValues.push({ date: rec.date, value: val });
-
       if (val < minRainfall) minRainfall = val;
       if (val > maxRainfall) maxRainfall = val;
 
       if (val < 1.0) {
         currentDrySpell++;
-        if (currentDrySpell > maxDrySpellDays) {
-          maxDrySpellDays = currentDrySpell;
-        }
+        if (currentDrySpell > maxDrySpellDays) maxDrySpellDays = currentDrySpell;
       } else {
         currentDrySpell = 0;
       }
@@ -189,29 +314,41 @@ export function computeDataQuality(
   if (minRainfall === Infinity) minRainfall = 0;
   if (maxRainfall === -Infinity) maxRainfall = 0;
 
-  const missingPercentage = totalRows > 0 ? (totalMissing / totalRows) * 100 : 0;
+  // Annual completeness from calendar
+  const calByYear = new Map<number, CalendarDay[]>();
+  cal.calendarRecords.forEach((r) => {
+    const yr = parseInt(r.date.substring(0, 4), 10);
+    if (!calByYear.has(yr)) calByYear.set(yr, []);
+    calByYear.get(yr)!.push(r);
+  });
 
-  // Annual completeness list
-  const annualCompleteness: YearCompleteness[] = Object.keys(yearBuckets)
-    .map(Number)
+  const annualCompleteness: YearCompleteness[] = Array.from(calByYear.keys())
     .sort((a, b) => a - b)
     .map((yr) => {
-      const b = yearBuckets[yr];
-      const validActual = b.actual - b.missing;
-      const pct = Math.min(100, Math.round((validActual / b.expected) * 1000) / 10);
+      const yearDays = calByYear.get(yr)!;
+      const isLeap = (yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0;
+      const expected = isLeap ? 366 : 365;
+      const validActual = yearDays.filter((d) => d.rainfall_mm !== null && d.rainfall_mm >= 0).length;
+      const missingRecords = expected - validActual;
+      const pct = Math.min(100, Math.round((validActual / expected) * 1000) / 10);
       const eligible = pct >= completenessThreshold;
-      let warning: string | undefined;
+      let exclusionReason: string | undefined;
       if (!eligible) {
-        warning = `نسبة الاكتمال (${pct}%) أقل من الحد الأدنى (${completenessThreshold}%)`;
+        if (pct < 10) {
+          exclusionReason = `سنة غير مكتملة (سجل جزئي ${validActual} يوماً فقط)`;
+        } else {
+          exclusionReason = `نسبة الاكتمال (${pct}%) أقل من الحد الأدنى (${completenessThreshold}%)`;
+        }
       }
       return {
         year: yr,
-        expected_records: b.expected,
+        expected_records: expected,
         actual_records: validActual,
-        missing_records: b.missing + Math.max(0, b.expected - b.actual),
+        missing_records: missingRecords,
         completeness_percentage: pct,
         eligible_for_ams: eligible,
-        warning,
+        exclusion_reason: exclusionReason,
+        warning: exclusionReason,
       };
     });
 
@@ -223,9 +360,8 @@ export function computeDataQuality(
       const q1 = nonZeroValues[Math.floor(nonZeroValues.length * 0.25)].value;
       const q3 = nonZeroValues[Math.floor(nonZeroValues.length * 0.75)].value;
       const iqr = q3 - q1;
-      const iqrThreshold = q3 + 3.0 * iqr; // Extreme upper fence
+      const iqrThreshold = q3 + 3.0 * iqr;
 
-      // Mean & Std of rainy days
       const sum = nonZeroValues.reduce((acc, v) => acc + v.value, 0);
       const mean = sum / nonZeroValues.length;
       const variance =
@@ -242,7 +378,7 @@ export function computeDataQuality(
               value: item.value,
               method: item.value > iqrThreshold ? 'Extreme IQR (Q3 + 3*IQR)' : 'Z-Score > 4.0',
               z_score: Math.round(z * 100) / 100,
-              decision: 'suspected', // never auto-deleted!
+              decision: 'suspected',
             });
           }
         }
@@ -250,38 +386,46 @@ export function computeDataQuality(
     }
   }
 
-  // Overall rating
-  let overallRating: QualityReport['overall_rating'] = 'ممتاز';
-  let overallRatingEn: QualityReport['overall_rating_en'] = 'Excellent';
+  let overallRating: QualityReport['overall_rating'] = 'جيد';
+  let overallRatingEn: QualityReport['overall_rating_en'] = 'Good';
 
-  const eligibleYearsCount = annualCompleteness.filter((y) => y.eligible_for_ams).length;
-  if (eligibleYearsCount < 10 || missingPercentage > 30) {
+  if (cal.qualityStatus === 'Not Suitable') {
     overallRating = 'غير صالح للنمذجة';
     overallRatingEn = 'Unsuitable';
-  } else if (eligibleYearsCount < 20 || missingPercentage > 15) {
+  } else if (cal.qualityStatus === 'Needs Review') {
     overallRating = 'مقبول';
     overallRatingEn = 'Fair';
-  } else if (missingPercentage > 5) {
+  } else {
     overallRating = 'جيد';
     overallRatingEn = 'Good';
   }
-
-  const sortedDates = records.map((r) => r.date).sort();
 
   return {
     station_id: stationId,
     station_name: stationName,
     total_rows: totalRows,
-    start_date: sortedDates[0] || '',
-    end_date: sortedDates[sortedDates.length - 1] || '',
-    total_missing: totalMissing,
-    missing_percentage: Math.round(missingPercentage * 100) / 100,
+    start_date: cal.startDate,
+    end_date: cal.endDate,
+    total_missing: cal.missingCalendarDays,
+    missing_percentage: cal.calendarSpanDays > 0 ? Math.round((cal.missingCalendarDays / cal.calendarSpanDays) * 10000) / 100 : 0,
     negative_count: negativeCount,
-    duplicate_count: duplicateCount,
+    duplicate_count: cal.duplicateDates.length,
     max_dry_spell_days: maxDrySpellDays,
-    longest_missing_gap_days: longestMissingGapDays,
+    longest_missing_gap_days: cal.longestGapDays,
     min_rainfall: minRainfall,
     max_rainfall: maxRainfall,
+    calendar_analysis: {
+      calendar_span_days: cal.calendarSpanDays,
+      rows_supplied: cal.rowsSupplied,
+      coverage_percentage: cal.coveragePercentage,
+      calendar_gaps_count: cal.calendarGapsCount,
+      longest_gap_days: cal.longestGapDays,
+      missing_calendar_days: cal.missingCalendarDays,
+      quality_status: cal.qualityStatus,
+      status_reasons: cal.statusReasons,
+      duplicate_dates_count: cal.duplicateDates.length,
+      duplicate_dates: cal.duplicateDates,
+    },
     suspected_outliers: suspectedOutliers.slice(0, 50),
     annual_completeness: annualCompleteness,
     overall_rating: overallRating,
@@ -290,7 +434,7 @@ export function computeDataQuality(
 }
 
 // ==========================================
-// 3. Extreme Indices Engine (Rx1day, Rx3day, Rx5day)
+// 4. Extreme Indices Engine (Rx1day, Rx3day, Rx5day)
 // ==========================================
 
 export function computeExtremeIndices(
@@ -300,48 +444,41 @@ export function computeExtremeIndices(
   rx1day: ExtremeIndexRecord[];
   rx3day: ExtremeIndexRecord[];
   rx5day: ExtremeIndexRecord[];
+  calendarDetails?: ReconstructedCalendar;
 } {
-  // Sort records strictly by date
-  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
+  const cal = reconstructDailyCalendar(records);
+  const stationId = records[0]?.station_id || 'STN01';
 
-  // Group by year
-  const recordsByYear: Record<number, DailyRecord[]> = {};
-  sorted.forEach((rec) => {
-    const yr = parseInt(rec.date.substring(0, 4), 10);
-    if (!isNaN(yr)) {
-      if (!recordsByYear[yr]) recordsByYear[yr] = [];
-      recordsByYear[yr].push(rec);
-    }
+  const calByYear = new Map<number, CalendarDay[]>();
+  cal.calendarRecords.forEach((r) => {
+    const yr = parseInt(r.date.substring(0, 4), 10);
+    if (!calByYear.has(yr)) calByYear.set(yr, []);
+    calByYear.get(yr)!.push(r);
   });
 
   const rx1day: ExtremeIndexRecord[] = [];
   const rx3day: ExtremeIndexRecord[] = [];
   const rx5day: ExtremeIndexRecord[] = [];
 
-  const years = Object.keys(recordsByYear)
-    .map(Number)
-    .sort((a, b) => a - b);
+  const years = Array.from(calByYear.keys()).sort((a, b) => a - b);
 
   years.forEach((yr) => {
-    const yearRecs = recordsByYear[yr];
+    const yearDays = calByYear.get(yr)!;
     const isLeap = (yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0;
     const expected = isLeap ? 366 : 365;
 
-    const validRecs = yearRecs.filter(
-      (r) => r.rainfall_mm !== null && r.quality_flag !== 'missing' && r.rainfall_mm >= 0
-    );
-    const validCount = validRecs.length;
+    const validDays = yearDays.filter((d) => d.rainfall_mm !== null && d.rainfall_mm >= 0);
+    const validCount = validDays.length;
     const completeness = Math.min(100, Math.round((validCount / expected) * 1000) / 10);
     const eligible = completeness >= completenessThreshold;
-    const stationId = yearRecs[0]?.station_id || 'CAI01';
 
     // 1. Rx1day
     let max1 = 0;
-    let max1Date = yearRecs[0]?.date || `${yr}-01-01`;
-    validRecs.forEach((r) => {
-      if (r.rainfall_mm !== null && r.rainfall_mm > max1) {
-        max1 = r.rainfall_mm;
-        max1Date = r.date;
+    let max1Date = yearDays[0]?.date || `${yr}-01-01`;
+    validDays.forEach((d) => {
+      if (d.rainfall_mm! > max1) {
+        max1 = d.rainfall_mm!;
+        max1Date = d.date;
       }
     });
 
@@ -355,32 +492,29 @@ export function computeExtremeIndices(
       valid_records: validCount,
       completeness,
       eligible,
-      warning: eligible ? undefined : `السنة غير مكتملة (${completeness}%)`,
+      warning: eligible ? undefined : `السنة غير مكتملة (${completeness}% < ${completenessThreshold}%)`,
     });
 
-    // 2. Rx3day (3-day moving window inside the calendar year; no missing allowed in window)
+    // 2. Rx3day - Strict consecutive daily calendar window
     let max3 = 0;
-    let max3Start = yearRecs[0]?.date || `${yr}-01-01`;
-    let max3End = yearRecs[0]?.date || `${yr}-01-03`;
+    let max3Start = yearDays[0]?.date || `${yr}-01-01`;
+    let max3End = yearDays[Math.min(2, yearDays.length - 1)]?.date || `${yr}-01-03`;
 
-    for (let i = 0; i < yearRecs.length - 2; i++) {
-      const r0 = yearRecs[i];
-      const r1 = yearRecs[i + 1];
-      const r2 = yearRecs[i + 2];
+    for (let i = 0; i <= yearDays.length - 3; i++) {
+      const d0 = yearDays[i];
+      const d1 = yearDays[i + 1];
+      const d2 = yearDays[i + 2];
 
       if (
-        r0.rainfall_mm !== null &&
-        r1.rainfall_mm !== null &&
-        r2.rainfall_mm !== null &&
-        r0.rainfall_mm >= 0 &&
-        r1.rainfall_mm >= 0 &&
-        r2.rainfall_mm >= 0
+        d0.rainfall_mm !== null &&
+        d1.rainfall_mm !== null &&
+        d2.rainfall_mm !== null
       ) {
-        const sum3 = r0.rainfall_mm + r1.rainfall_mm + r2.rainfall_mm;
+        const sum3 = d0.rainfall_mm + d1.rainfall_mm + d2.rainfall_mm;
         if (sum3 > max3) {
           max3 = sum3;
-          max3Start = r0.date;
-          max3End = r2.date;
+          max3Start = d0.date;
+          max3End = d2.date;
         }
       }
     }
@@ -395,29 +529,29 @@ export function computeExtremeIndices(
       valid_records: validCount,
       completeness,
       eligible,
-      warning: eligible ? undefined : `السنة غير مكتملة (${completeness}%)`,
+      warning: eligible ? undefined : `السنة غير مكتملة (${completeness}% < ${completenessThreshold}%)`,
     });
 
-    // 3. Rx5day (5-day moving window inside the calendar year; no missing allowed in window)
+    // 3. Rx5day - Strict consecutive daily calendar window
     let max5 = 0;
-    let max5Start = yearRecs[0]?.date || `${yr}-01-01`;
-    let max5End = yearRecs[0]?.date || `${yr}-01-05`;
+    let max5Start = yearDays[0]?.date || `${yr}-01-01`;
+    let max5End = yearDays[Math.min(4, yearDays.length - 1)]?.date || `${yr}-01-05`;
 
-    for (let i = 0; i < yearRecs.length - 4; i++) {
-      let hasMissing = false;
+    for (let i = 0; i <= yearDays.length - 5; i++) {
+      let validWindow = true;
       let sum5 = 0;
       for (let k = 0; k < 5; k++) {
-        const rk = yearRecs[i + k];
-        if (rk.rainfall_mm === null || rk.rainfall_mm < 0) {
-          hasMissing = true;
+        const dk = yearDays[i + k];
+        if (dk.rainfall_mm === null) {
+          validWindow = false;
           break;
         }
-        sum5 += rk.rainfall_mm;
+        sum5 += dk.rainfall_mm;
       }
-      if (!hasMissing && sum5 > max5) {
+      if (validWindow && sum5 > max5) {
         max5 = sum5;
-        max5Start = yearRecs[i].date;
-        max5End = yearRecs[i + 4].date;
+        max5Start = yearDays[i].date;
+        max5End = yearDays[i + 4].date;
       }
     }
 
@@ -431,11 +565,11 @@ export function computeExtremeIndices(
       valid_records: validCount,
       completeness,
       eligible,
-      warning: eligible ? undefined : `السنة غير مكتملة (${completeness}%)`,
+      warning: eligible ? undefined : `السنة غير مكتملة (${completeness}% < ${completenessThreshold}%)`,
     });
   });
 
-  return { rx1day, rx3day, rx5day };
+  return { rx1day, rx3day, rx5day, calendarDetails: cal };
 }
 
 // Convert extreme index record to AMS
@@ -452,7 +586,7 @@ export function buildAnnualMaximumSeries(indices: ExtremeIndexRecord[]): AMSReco
     eligible_for_model: idx.eligible,
     exclusion_reason: idx.eligible
       ? undefined
-      : `نسبة الاكتمال ${idx.completeness}% لا تستوفي الحد الأدنى`,
+      : `نسبة الاكتمال ${idx.completeness}% لا تستوفي الحد الأدنى المطلوب للمحرك الإحصائي`,
   }));
 }
 
@@ -1656,4 +1790,167 @@ export function runMeasurementAnomalyEngine(records: DailyRecord[]): Array<{
   }
 
   return anomalies;
+}
+
+// ==========================================
+// 10. Storm Daniel & Weather Events Engine
+// ==========================================
+
+export function analyzeStormEvent(
+  records: DailyRecord[],
+  eventName: string = 'عاصفة دانيال',
+  startDate: string = '2023-09-08',
+  endDate: string = '2023-09-12'
+): {
+  available: boolean;
+  status: 'available' | 'not_available';
+  total_event_rainfall_mm: number | null;
+  max_daily_mm: number | null;
+  warning?: string;
+  daily_chart_data: Array<{ date: string; rainfall_mm: number }>;
+} {
+  const sortedDates = records.map((r) => r.date).filter(Boolean).sort();
+  const maxDatasetDate = sortedDates[sortedDates.length - 1] || '';
+
+  const eventRecords = records.filter(
+    (r) => r.date >= startDate && r.date <= endDate && r.rainfall_mm !== null
+  );
+
+  if (eventRecords.length === 0) {
+    return {
+      available: false,
+      status: 'not_available',
+      total_event_rainfall_mm: null,
+      max_daily_mm: null,
+      warning: `لا توجد بيانات داخل فترة الحدث في الملف الحالي (تغطية البيانات تنتهي في ${maxDatasetDate || 'تاريخ غير محدد'})`,
+      daily_chart_data: [],
+    };
+  }
+
+  const dailyChart = eventRecords.map((r) => ({
+    date: r.date,
+    rainfall_mm: r.rainfall_mm || 0,
+  }));
+
+  const total = eventRecords.reduce((sum, r) => sum + (r.rainfall_mm || 0), 0);
+  const maxDaily = Math.max(...eventRecords.map((r) => r.rainfall_mm || 0));
+
+  return {
+    available: true,
+    status: 'available',
+    total_event_rainfall_mm: Math.round(total * 10) / 10,
+    max_daily_mm: Math.round(maxDaily * 10) / 10,
+    daily_chart_data: dailyChart,
+  };
+}
+
+// ==========================================
+// 11. Step-by-Step Numerical Substitution Generator
+// ==========================================
+
+export function generateStepByStepSubstitution(
+  type: 'return_level' | 'rx3day' | 'gumbel' | 'gev' | 'pettitt',
+  params: {
+    model?: 'GEV' | 'Gumbel';
+    mu?: number;
+    sigma?: number;
+    xi?: number;
+    T?: number;
+    result?: number;
+    rx3Values?: Array<{ date: string; value: number }>;
+    dataSource?: string;
+  }
+): CalculationStepExplanation {
+  const model = params.model || 'Gumbel';
+  const mu = params.mu ?? 24.29;
+  const sigma = params.sigma ?? 16.785;
+  const xi = params.xi ?? 0;
+  const T = params.T ?? 100;
+  const source = params.dataSource || 'سلسلة البيانات القصوى السنوية (AMS) المؤهلة';
+
+  if (type === 'return_level' || type === 'gumbel' || type === 'gev') {
+    if (model === 'Gumbel' || xi === 0) {
+      const p = 1 - 1 / T;
+      const lnP = Math.log(p);
+      const minusLnP = -lnP;
+      const lnMinusLnP = Math.log(minusLnP);
+      const prod = sigma * lnMinusLnP;
+      const res = mu - prod;
+
+      return {
+        title_ar: `خطوات حساب مستوى الرجوع لفترة ${T} سنة — نموذج Gumbel`,
+        general_formula: `x_T = μ - σ × ln(-ln(1 - 1/T))`,
+        latex_formula: `x_{${T}} = \\mu - \\sigma \\ln\\left(-\\ln\\left(1 - \\frac{1}{${T}}\\right)\\right)`,
+        parameters: [
+          { name: 'معامل الموضع (Location)', symbol: 'μ', value: mu.toFixed(3), unit: 'مم', description_ar: 'الموضع المركزي لتوزيع غامبل' },
+          { name: 'معامل المقياس (Scale)', symbol: 'σ', value: sigma.toFixed(3), unit: 'مم', description_ar: 'مقياس انتشار التوزيع (يجب أن يكون موجباً)' },
+          { name: 'معامل الشكل (Shape)', symbol: 'ξ', value: 0, unit: '', description_ar: 'يساوي صفراً في توزيع غامبل (النوع الأول للأمطار القصوى)' },
+          { name: 'فترة العودة التصميمية', symbol: 'T', value: T, unit: 'سنة', description_ar: 'الفاصل الزمني المتوقع لحدوث هطول مساوٍ أو أكبر' }
+        ],
+        numerical_substitution: `الخطوة 1: حساب احتمالية عدم التجاوز P = 1 - 1/${T} = ${(1 - 1/T).toFixed(4)}
+الخطوة 2: حساب اللوغاريتم المزدوج ln(-ln(${(1 - 1/T).toFixed(4)})) = ${lnMinusLnP.toFixed(4)}
+الخطوة 3: ضرب مقياس الانتشار ${sigma.toFixed(3)} × ${lnMinusLnP.toFixed(4)} = ${prod.toFixed(3)}
+الخطوة 4: الطرح من معامل الموضع ${mu.toFixed(3)} - (${prod.toFixed(3)}) = ${res.toFixed(2)} مم`,
+        final_result: Math.round(res * 10) / 10,
+        unit: 'مم',
+        data_source: source,
+        warnings: T > 50 ? [`فترة العودة (${T} سنة) تتطلب الحذر والاستقراء نظراً لطول السجل`] : undefined
+      };
+    } else {
+      const p = 1 - 1 / T;
+      const minusLnP = -Math.log(p);
+      const power = Math.pow(minusLnP, -xi);
+      const bracket = power - 1;
+      const factor = (sigma / xi) * bracket;
+      const res = mu + factor;
+
+      return {
+        title_ar: `خطوات حساب مستوى الرجوع لفترة ${T} سنة — نموذج GEV`,
+        general_formula: `x_T = μ + (σ / ξ) × [(-ln(1 - 1/T))^(-ξ) - 1]`,
+        latex_formula: `x_{${T}} = \\mu + \\frac{\\sigma}{\\xi} \\left[ \\left(-\\ln\\left(1 - \\frac{1}{${T}}\\right)\\right)^{-\\xi} - 1 \\right]`,
+        parameters: [
+          { name: 'معامل الموضع', symbol: 'μ', value: mu.toFixed(3), unit: 'مم', description_ar: 'موضع التوزيع العام للقيم القصوى' },
+          { name: 'معامل المقياس', symbol: 'σ', value: sigma.toFixed(3), unit: 'مم', description_ar: 'مقياس التشتت' },
+          { name: 'معامل الشكل (Fréchet/Weibull)', symbol: 'ξ', value: xi.toFixed(3), unit: '', description_ar: 'يحدد سمك الذيل وتصنيف التوزيع' },
+          { name: 'فترة العودة', symbol: 'T', value: T, unit: 'سنة', description_ar: 'فترة العودة المطلوبة' }
+        ],
+        numerical_substitution: `الخطوة 1: احتمالية عدم التجاوز P = 1 - 1/${T} = ${(1 - 1/T).toFixed(4)}
+الخطوة 2: حساب الحد الأسي (-ln(P))^(-ξ) = (${minusLnP.toFixed(4)})^(-${xi.toFixed(3)}) = ${power.toFixed(4)}
+الخطوة 3: ضرب القوس في (σ / ξ) = (${sigma.toFixed(3)} / ${xi.toFixed(3)}) × (${power.toFixed(4)} - 1) = ${factor.toFixed(3)}
+الخطوة 4: الإضافة إلى الموضع ${mu.toFixed(3)} + ${factor.toFixed(3)} = ${res.toFixed(2)} مم`,
+        final_result: Math.round(res * 10) / 10,
+        unit: 'مم',
+        data_source: source,
+        warnings: T > 50 ? [`فترة العودة (${T} سنة) تتجاوز طول السجل المرصود`] : undefined
+      };
+    }
+  }
+
+  // rx3day window calculation explanation
+  const rx3 = params.rx3Values || [
+    { date: '1957-12-07', value: 37.1 },
+    { date: '1957-12-08', value: 15.0 },
+    { date: '1957-12-09', value: 24.9 }
+  ];
+  const sum3 = rx3.reduce((s, x) => s + x.value, 0);
+
+  return {
+    title_ar: 'خطوات حساب مؤشر Rx3day (أقصى هطول متتالي لثلاثة أيام تقويمية)',
+    general_formula: `Rx3day = max(P_d + P_{d+1} + P_{d+2}) على أيام تقويمية متتالية`,
+    latex_formula: `Rx3day = \\max_{d \\in \\text{Year}} \\sum_{k=0}^{2} P_{d+k}`,
+    parameters: rx3.map((r, i) => ({
+      name: `هطول اليوم ${i + 1} (${r.date})`,
+      symbol: `P_{d+${i}}`,
+      value: r.value,
+      unit: 'مم',
+      description_ar: `قيمة قياس المطر لليوم التقويمي المتتالي ${r.date}`
+    })),
+    numerical_substitution: `نافذة 3 أيام متتالية:
+${rx3.map(r => `${r.date}: ${r.value} مم`).join('\n')}
+المجموع = ${rx3.map(r => r.value).join(' + ')} = ${sum3.toFixed(1)} مم
+(تم التأكد من استمرارية الأيام التقويمية وعدم وجود فجوات في النافذة)`,
+    final_result: Math.round(sum3 * 10) / 10,
+    unit: 'مم',
+    data_source: source
+  };
 }

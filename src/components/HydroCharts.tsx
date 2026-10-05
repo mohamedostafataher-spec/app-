@@ -426,10 +426,33 @@ export const ReturnLevelCurveChart: React.FC<ReturnLevelCurveChartProps> = ({
 interface DanielStormChartProps {
   dailyData: Array<{ date: string; rainfall_mm: number }>;
   historicalMax: number;
+  isAvailable?: boolean;
+  warningMessage?: string;
 }
 
-export const DanielStormChart: React.FC<DanielStormChartProps> = ({ dailyData, historicalMax }) => {
+export const DanielStormChart: React.FC<DanielStormChartProps> = ({
+  dailyData,
+  historicalMax,
+  isAvailable = true,
+  warningMessage,
+}) => {
   const svgRef = useRef<SVGSVGElement>(null);
+
+  if (!isAvailable || !dailyData || dailyData.length === 0) {
+    return (
+      <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-3 min-h-[220px]">
+        <div className="px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full text-xs font-mono font-bold">
+          Status: Not Available
+        </div>
+        <div className="space-y-1 max-w-md">
+          <h4 className="text-sm font-bold text-white">لا توجد بيانات داخل فترة الحدث في الملف الحالي</h4>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            {warningMessage || 'الفترة الزمنية للبيانات المرفوعة لا تغطي أيام عاصفة دانيال (8 – 12 سبتمبر 2023). تم حجب الحساب منعاً لعرض إجمالي 0 مم مضلل.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const width = 640;
   const height = 240;
