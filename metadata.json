@@ -1,6 +1,6 @@
 {
   "name": "منصة تحليل الأمطار القصوى",
-  "description": "منصة تحليل الأمطار القصوى - فحص جودة البيانات والتجانس، مؤشرات Rx، سلسلة AMS، ضبط توزيعي GEV وGumbel، وحساب فترات الرجوع وفترات الثقة 95% بـ Bootstrap داخل المتصفح بـ JavaScript.",
+  "description": "منصة احترافية متكاملة لتحليل الأمطار القصوى تعتمد على محرك إحصائي متقدم (GEV/Gumbel) مع بنية Backend سحابية تدعم التحليلات الهيدرولوجية المكثفة والتحقق العلمي Bootstrap.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

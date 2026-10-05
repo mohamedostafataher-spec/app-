@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useMemo, useRef } from 'react';
+import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -52,6 +53,8 @@ import {
 import { SpatialRainfallChart } from '../SpatialRainfallChart';
 import { FormulasAndReferencesModal } from '../FormulasAndReferencesModal';
 
+import { runFullAnalysis } from '../../lib/api';
+
 export const ExtremeRainfallPlatformView: React.FC = () => {
   // 1. Data State
   const [stationName, setStationName] = useState<string>('محطة الإسكندرية (سجل تجريبي)');
@@ -59,6 +62,9 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
     DEMO_DAILY_RECORDS.filter((r) => r.station_id === 'ALX01')
   );
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState<boolean>(false);
+  const [hydro, setHydro] = useState<any>(null);
 
   // Column mapping & preview state
   const [rawTableRows, setRawTableRows] = useState<any[][] | null>(null);
@@ -80,6 +86,37 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
+  // Architecture State (Page 2)
+  const [projectId] = useState<string>('default-research-project');
+  const [datasetId, setDatasetId] = useState<string>(`ds_${Date.now()}`);
+
+  const handleScientificAnalysis = async (data: DailyRecord[], name: string) => {
+    setIsLoadingAnalysis(true);
+    setUploadError(null);
+    try {
+      const response = await runFullAnalysis({
+        projectId,
+        datasetId: `ds_${Date.now()}`,
+        stationId: name,
+        records: data,
+        analysisType: 'full-hydrological-analysis'
+      });
+      setHydro(response.results);
+    } catch (err: any) {
+      setUploadError(`فشل المحرك الإحصائي: ${err.message}`);
+    } finally {
+      setIsLoadingAnalysis(false);
+    }
+  };
+
+  // Replace old useMemo with a manual trigger on data change
+  // For demo, we trigger once
+  React.useEffect(() => {
+    if (records.length > 0 && !hydro) {
+      handleScientificAnalysis(records, stationName);
+    }
+  }, []);
+
   // Helper: Download Template
   const downloadTemplate = () => {
     const csvContent = "Date,Rainfall_mm,Lat,Lon\n2023-01-01,15.5,31.2,29.9\n2023-01-02,0,31.2,29.9\n2022-12-15,45.2,31.2,29.9";
@@ -94,36 +131,24 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  // Load Demo Data
-  // Manual Input Parser - Robust Scientific Version
   const handleManualInputSubmit = () => {
     if (!manualInputText.trim()) return;
     setUploadError(null);
     try {
       const lines = manualInputText.trim().split(/\r?\n/);
-      
-      // Filter out scientific command headers (like "تحليل إحصائي -> ...")
       const dataLines = lines.filter(line => {
         const l = line.toLowerCase();
         return !l.includes('تحليل') && !l.includes('→') && !l.includes('الخطوات') && !l.includes('فحص جودة');
       }).filter(line => line.trim().length > 0);
 
-      if (dataLines.length < 1) {
-        throw new Error('الرجاء إدخال أسطر البيانات (تاريخ، مطر) أسفل سطر الأمر.');
-      }
+      if (dataLines.length < 1) throw new Error('الرجاء إدخال أسطر البيانات (تاريخ، مطر) أسفل سطر الأمر.');
 
-      const rows = dataLines.map(line => {
-        // Support comma, tab, or semicolon delimiters
-        const cells = line.split(/[,\t;]/).map(c => c.trim());
-        return cells;
-      });
-
+      const rows = dataLines.map(line => line.split(/[,\t;]/).map(c => c.trim()));
       setUploadedFileName("Manual_Scientific_Analysis");
       setRawTableRows(rows);
       setShowColumnMapper(true);
       setShowManualInput(false);
       
-      // Auto-detect columns
       let dIdx = 0, rIdx = 1;
       const firstRow = rows[0].map(c => String(c).toLowerCase());
       firstRow.forEach((c, idx) => {
@@ -146,243 +171,119 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
     setRawTableRows(null);
     setShowColumnMapper(false);
     setUploadError(null);
+    handleScientificAnalysis(alexRecords, 'محطة الإسكندرية');
   };
 
-  // File Upload Handler - Unified Robust Version (Excel & CSV)
+  // File Upload Handler with Papaparse & XLSX integration
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploadError(null);
-    const fileName = file.name;
-    setUploadedFileName(fileName);
-    const reader = new FileReader();
+    setUploadedFileName(file.name);
 
-    reader.onload = (evt) => {
-      try {
-        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        // XLSX.read handles .xlsx, .xls, .csv, .ods, etc. automatically
-        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-
-        if (rows.length < 1) throw new Error('الملف فارغ أو غير صالح.');
-
-        // Auto-detect columns by keywords
-        let dIdx = -1, rIdx = -1, ltIdx = -1, lnIdx = -1;
-        const header = rows[0].map((h) => String(h || '').toLowerCase().trim());
-        
-        header.forEach((h, idx) => {
-          if (h.includes('date') || h.includes('تاريخ') || h.includes('day') || h.includes('time') || h.includes('يوم')) dIdx = idx;
-          if (h.includes('rain') || h.includes('مطر') || h.includes('mm') || h.includes('precip') || h.includes('قيمة')) rIdx = idx;
-          if (h.includes('lat') || h.includes('عرض')) ltIdx = idx;
-          if (h.includes('lon') || h.includes('long') || h.includes('طول')) lnIdx = idx;
-        });
-
-        // Fallback if not detected
-        if (dIdx === -1) dIdx = 0;
-        if (rIdx === -1) rIdx = header.length > 1 ? 1 : 0;
-
-        setDateColIdx(dIdx);
-        setRainColIdx(rIdx);
-        setLatColIdx(ltIdx);
-        setLonColIdx(lnIdx);
-        setRawTableRows(rows);
-        setShowColumnMapper(true);
-        parseRowsIntoRecords(rows, dIdx, rIdx, ltIdx, lnIdx, fileName);
-      } catch (err: any) {
-        setUploadError(`خطأ في معالجة الملف: ${err.message}`);
-      }
-    };
-
-    reader.readAsArrayBuffer(file);
+    if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+      Papa.parse(file, {
+        header: false,
+        skipEmptyLines: true,
+        complete: (results: Papa.ParseResult<any>) => {
+          const rows = results.data as any[][];
+          processParsedData(rows, file.name);
+        },
+        error: (error: Error) => setUploadError(`خطأ في قراءة ملف CSV: ${error.message}`)
+      });
+    } else {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+          processParsedData(rows, file.name);
+        } catch (err: any) {
+          setUploadError(`خطأ في معالجة الملف: ${err.message}`);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
   };
+
+  const processParsedData = (rows: any[][], fName: string) => {
+    if (rows.length < 1) throw new Error('الملف فارغ.');
+    
+    let dIdx = 0, rIdx = 1, ltIdx = -1, lnIdx = -1;
+    const header = rows[0].map((h) => String(h || '').toLowerCase().trim());
+    header.forEach((h, idx) => {
+      if (h.includes('date') || h.includes('تاريخ')) dIdx = idx;
+      if (h.includes('rain') || h.includes('مطر') || h.includes('mm')) rIdx = idx;
+      if (h.includes('lat') || h.includes('عرض')) ltIdx = idx;
+      if (h.includes('lon') || h.includes('طول')) lnIdx = idx;
+    });
+
+    setDateColIdx(dIdx); setRainColIdx(rIdx); setLatColIdx(ltIdx); setLonColIdx(lnIdx);
+    setRawTableRows(rows);
+    setShowColumnMapper(true);
+    parseRowsIntoRecords(rows, dIdx, rIdx, ltIdx, lnIdx, fName);
+  };
+
 
   const parseRowsIntoRecords = (rows: any[][], dCol: number, rCol: number, ltCol: number, lnCol: number, fName: string) => {
     const cleanStation = fName.replace(/\.[^/.]+$/, '').slice(0, 40);
     const parsed: DailyRecord[] = [];
-    
-    // Valid headers often occupy the first row. We start from row 1 or 0 if data is pure.
-    // If headers are missing, the auto-detect might fail, so we ensure fallback.
-    
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       if (!row || row.length === 0) continue;
-      
       let rawDateValue = row[dCol];
+      if (i === 0 && typeof rawDateValue === 'string' && rawDateValue.toLowerCase().includes('date')) continue;
+      
       let dateStr = '';
-
-      // Skip header rows if they are strings and this is row 0
-      if (i === 0 && typeof rawDateValue === 'string' && (rawDateValue.toLowerCase().includes('date') || rawDateValue.includes('تاريخ'))) continue;
-
-      // Handle JS Date objects
-      if (rawDateValue instanceof Date) {
-        if (!isNaN(rawDateValue.getTime())) {
-          dateStr = rawDateValue.toISOString().split('T')[0];
-        }
-      } else if (typeof rawDateValue === 'number') {
-        // Excel serial date number check (usually > 10000 for dates in 1927+)
-        if (rawDateValue > 10000) {
-          const d = new Date(Math.round((rawDateValue - 25569) * 86400 * 1000));
-          if (!isNaN(d.getTime())) dateStr = d.toISOString().split('T')[0];
-        } else {
-          dateStr = String(rawDateValue);
-        }
-      } else {
-        dateStr = String(rawDateValue || '').trim();
-        // Try parsing common formats if it's just a string like "01/01/2023"
-        if (dateStr && !dateStr.includes('-') && (dateStr.includes('/') || dateStr.includes('.'))) {
-          const d = new Date(dateStr);
-          if (!isNaN(d.getTime())) dateStr = d.toISOString().split('T')[0];
-        }
-      }
+      if (rawDateValue instanceof Date) dateStr = rawDateValue.toISOString().split('T')[0];
+      else dateStr = String(rawDateValue || '').trim();
 
       let rainVal = parseFloat(String(row[rCol] || '0').replace(/[^0-9.]/g, ''));
-      let latVal = ltCol !== -1 && row[ltCol] !== undefined ? parseFloat(String(row[ltCol]).replace(/[^0-9.-]/g, '')) : 0;
-      let lonVal = lnCol !== -1 && row[lnCol] !== undefined ? parseFloat(String(row[lnCol]).replace(/[^0-9.-]/g, '')) : 0;
+      let latVal = ltCol !== -1 ? parseFloat(String(row[ltCol])) : 0;
+      let lonVal = lnCol !== -1 ? parseFloat(String(row[lnCol])) : 0;
       
-      if (dateStr && !isNaN(rainVal) && dateStr.length >= 8) {
+      if (dateStr && !isNaN(rainVal)) {
         parsed.push({
           date: dateStr,
           station_id: 'UPLOADED',
           station_name: cleanStation,
           governorate: 'مصر',
-          latitude: isNaN(latVal) ? 0 : latVal,
-          longitude: isNaN(lonVal) ? 0 : lonVal,
+          latitude: latVal || 0,
+          longitude: lonVal || 0,
           rainfall_mm: rainVal >= 0 ? rainVal : 0,
-          quality_flag: rainVal >= 0 ? 'valid' : 'rejected_negative',
+          quality_flag: 'valid',
           source: fName,
         });
       }
     }
-
-    if (parsed.length === 0) {
-      throw new Error('لم يتم العثور على بيانات صالحة. يرجى التأكد من أن الملف يحتوي على أرقام في عمود المطر وتواريخ صحيحة.');
-    }
-
     setStationName(cleanStation);
     setRecords(parsed);
+    handleScientificAnalysis(parsed, cleanStation);
   };
 
   const applyColumnMapping = (newDCol: number, newRCol: number, newLtCol: number, newLnCol: number) => {
     if (!rawTableRows) return;
-    setDateColIdx(newDCol);
-    setRainColIdx(newRCol);
-    setLatColIdx(newLtCol);
-    setLonColIdx(newLnCol);
-    try {
-      parseRowsIntoRecords(rawTableRows, newDCol, newRCol, newLtCol, newLnCol, uploadedFileName);
-      setUploadError(null);
-    } catch (e: any) {
-      setUploadError(e.message);
-    }
+    setDateColIdx(newDCol); setRainColIdx(newRCol); setLatColIdx(newLtCol); setLonColIdx(newLnCol);
+    parseRowsIntoRecords(rawTableRows, newDCol, newRCol, newLtCol, newLnCol, uploadedFileName);
   };
 
-  // PDF Export Logic
   const exportToPDF = async () => {
     if (!reportRef.current || !hydro) return;
     setIsExportingPDF(true);
-    
-    // Smooth scroll to top to ensure capturing from beginning
-    reportRef.current.scrollTo({ top: 0 });
-    
     try {
-      // Small delay to ensure any animations or state changes are settled
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 1.5, // Slightly lower scale for better performance and stability
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: 1200, // Fixed width for consistent layout in PDF
-      });
-      
-      const imgData = canvas.toDataURL('image/jpeg', 0.8); // Use JPEG with 80% quality for smaller PDF size
+      const canvas = await html2canvas(reportRef.current, { scale: 1.5, useCORS: true });
+      const imgData = canvas.toDataURL('image/jpeg', 0.8);
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const imgProps = pdf.getImageProperties(imgData);
-      const canvasHeightMM = (imgProps.height * pdfWidth) / imgProps.width;
-      
-      let heightLeft = canvasHeightMM;
-      let position = 0;
-      
-      // Add first page
-      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, canvasHeightMM);
-      heightLeft -= pdfHeight;
-      
-      // Add subsequent pages if content overflows
-      while (heightLeft > 0) {
-        position = heightLeft - canvasHeightMM;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, canvasHeightMM);
-        heightLeft -= pdfHeight;
-      }
-      
+      pdf.addImage(imgData, 'JPEG', 0, 0, 210, (canvas.height * 210) / canvas.width);
       pdf.save(`Hydrological_Analysis_${stationName}.pdf`);
-    } catch (err: any) {
-      console.error('PDF Generation failed', err);
-      setUploadError(`فشل في إنشاء ملف PDF: ${err.message}`);
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsExportingPDF(false);
     }
   };
-
-  // ------------------------------------------
-  // CORE ENGINE COMPUTATION
-  // ------------------------------------------
-  const hydro = useMemo(() => {
-    if (!records || records.length === 0) return null;
-
-    const qc = computeDataQuality(records, 90);
-    const annualTotals = qc.annual_completeness.map(ac => ({
-      year: ac.year,
-      total_mm: records.filter(r => r.date.startsWith(String(ac.year))).reduce((s, r) => s + (r.rainfall_mm || 0), 0)
-    }));
-    const homogeneity = computeHomogeneityAndTrend(annualTotals, 'STN', stationName);
-    const characterization = computeRainfallCharacterization(records, 1.0);
-    const indices = computeExtremeIndices(records, 90);
-    
-    // Storm Analysis
-    const stormRecords = records.filter(r => r.date >= stormStartDate && r.date <= stormEndDate);
-    const stormMaxDaily = stormRecords.reduce((m, r) => Math.max(m, r.rainfall_mm || 0), 0);
-    
-    // AMS & Fitting
-    const ams = buildAnnualMaximumSeries(indices.rx1day);
-    const fitValues = ams.filter(a => a.eligible_for_model).map(a => a.maximum_value_mm);
-    const canModel = fitValues.length >= 5;
-
-    let gev: any = null, gumbel: any = null, bestModel: any = null, bestGof: any = null, returnLevels: any[] = [], rp: number = 0;
-
-    if (canModel) {
-      gev = fitGEVLMoments(fitValues, 'STN', 'Rx1day');
-      gumbel = fitGumbelLMoments(fitValues, 'STN', 'Rx1day');
-      bestModel = gev.aic < gumbel.aic ? gev : gumbel;
-      bestGof = computeGoodnessOfFit(fitValues, bestModel);
-      returnLevels = computeReturnLevelsWithBootstrap(fitValues, bestModel, [2, 5, 10, 25, 50, 100], 1000);
-
-      // Inverse Return Period
-      const x = Math.max(0.1, inputRainMm);
-      const mu = bestModel.mu, sigma = Math.max(0.001, bestModel.sigma), xi = bestModel.xi ?? 0;
-      let cdf = 0;
-      if (Math.abs(xi) < 0.0001 || bestModel.model === 'Gumbel') {
-        cdf = Math.exp(-Math.exp(-(x - mu) / sigma));
-      } else {
-        const arg = 1 + (xi * (x - mu)) / sigma;
-        cdf = arg <= 0 ? (xi < 0 ? 1 : 0) : Math.exp(-Math.pow(arg, -1 / xi));
-      }
-      rp = Math.round((1 / Math.max(1e-6, 1 - cdf)) * 10) / 10;
-    }
-
-    return { 
-      qc, homogeneity, characterization, ams, bestModel, bestGof, returnLevels, 
-      returnPeriodYears: rp, nYears: fitValues.length, canModel,
-      stormMaxDaily, stormDailyChartData: stormRecords.map(r => ({ date: r.date, rainfall_mm: r.rainfall_mm || 0 }))
-    };
-  }, [records, stormStartDate, stormEndDate, inputRainMm, stationName]);
 
   const exportAllToExcel = () => {
     if (!hydro) return;
@@ -481,6 +382,12 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3 self-end md:self-auto">
+             {isSyncing && (
+               <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-full animate-pulse no-print">
+                 <RefreshCw className="w-3 h-3 animate-spin" />
+                 <span className="text-[9px] font-black uppercase">Syncing Cloud...</span>
+               </div>
+             )}
              <div className="text-left hidden sm:block">
                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Station</p>
                 <p className="text-[11px] font-black text-slate-900 truncate max-w-[120px] md:max-w-[200px]">{stationName}</p>
@@ -493,6 +400,19 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
 
         {/* Dynamic Workflow View */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative" ref={reportRef}>
+          {isLoadingAnalysis && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex flex-col items-center justify-center space-y-6 no-print">
+               <div className="relative">
+                  <div className="w-20 h-20 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+                  <Activity className="absolute inset-0 m-auto w-8 h-8 text-blue-500 animate-pulse" />
+               </div>
+               <div className="text-center space-y-2">
+                  <h3 className="text-xl font-black text-white tracking-tight">جاري التحليل الإحصائي المتقدم</h3>
+                  <p className="text-blue-200 text-xs font-bold uppercase tracking-widest animate-pulse">Running GEV & Gumbel Distributions...</p>
+               </div>
+            </div>
+          )}
+          
           {isExportingPDF && (
             <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[100] flex flex-col items-center justify-center space-y-4 no-print">
                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -630,7 +550,7 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50 font-bold text-slate-700">
-                           {hydro.ams.slice(0, 10).map((a, i) => (
+                           {hydro.ams.slice(0, 10).map((a: any, i: number) => (
                              <tr key={i} className="hover:bg-slate-50/50">
                                <td className="p-3 md:p-4">{a.year}</td>
                                <td className="p-3 md:p-4 text-blue-600">{a.maximum_value_mm} مم</td>
@@ -735,7 +655,7 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50 font-bold text-slate-700">
-                              {hydro.returnLevels.map(row => (
+                              {hydro.returnLevels.map((row: any) => (
                                 <tr key={row.return_period_years} className="hover:bg-slate-50 transition-colors">
                                   <td className="p-3 md:p-5 text-slate-900">{row.return_period_years} سنة</td>
                                   <td className="p-3 md:p-5 text-slate-400">{(100 / row.return_period_years).toFixed(1)}%</td>
@@ -777,7 +697,7 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
                     </div>
                     <div className="p-4 md:p-8 h-[350px] md:h-[500px]">
                       <ReturnLevelCurveChart
-                        levels={hydro.returnLevels.map(l => ({ period: l.return_period_years, level: l.return_level_mm, lower: l.lower_ci_mm, upper: l.upper_ci_mm }))}
+                        levels={hydro.returnLevels.map((l: any) => ({ period: l.return_period_years, level: l.return_level_mm, lower: l.lower_ci_mm, upper: l.upper_ci_mm }))}
                         userHighlightT={hydro.returnPeriodYears <= 200 ? hydro.returnPeriodYears : undefined}
                         userHighlightMm={inputRainMm}
                       />

@@ -1,0 +1,86 @@
+{
+  "collections": {
+    "users": {
+      "fields": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      }
+    },
+    "projects": {
+      "fields": {
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "title": { "type": "string" },
+        "language": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "updatedAt": { "type": "timestamp" }
+      },
+      "subcollections": {
+        "datasets": {
+          "fields": {
+            "ownerId": { "type": "string" },
+            "fileName": { "type": "string" },
+            "storagePath": { "type": "string" },
+            "sha256": { "type": "string" },
+            "sourceType": { "type": "string" },
+            "sourceName": { "type": "string" },
+            "officialStatus": { "type": "string" },
+            "temporalResolution": { "type": "string" },
+            "unit": { "type": "string" },
+            "status": { "type": "string" },
+            "createdAt": { "type": "timestamp" }
+          }
+        },
+        "stations": {
+          "fields": {
+            "name": { "type": "string" },
+            "governorate": { "type": "string" },
+            "latitude": { "type": "number" },
+            "longitude": { "type": "number" },
+            "elevationM": { "type": "number" },
+            "startDate": { "type": "string" },
+            "endDate": { "type": "string" },
+            "source": { "type": "string" }
+          }
+        },
+        "events": {
+          "fields": {
+            "name": { "type": "string" },
+            "startDate": { "type": "timestamp" },
+            "endDate": { "type": "timestamp" },
+            "region": { "type": "string" },
+            "source": { "type": "string" },
+            "sourceUrl": { "type": "string" }
+          }
+        },
+        "runs": {
+          "fields": {
+            "ownerId": { "type": "string" },
+            "datasetId": { "type": "string" },
+            "stationId": { "type": "string" },
+            "status": { "type": "string" },
+            "analysisType": { "type": "string" },
+            "parameters": { "type": "map" },
+            "warnings": { "type": "array" },
+            "resultStoragePath": { "type": "string" },
+            "createdAt": { "type": "timestamp" },
+            "completedAt": { "type": "timestamp" }
+          }
+        },
+        "audit": {
+          "fields": {
+            "actorId": { "type": "string" },
+            "action": { "type": "string" },
+            "entity": { "type": "string" },
+            "entityId": { "type": "string" },
+            "before": { "type": "map" },
+            "after": { "type": "map" },
+            "createdAt": { "type": "timestamp" }
+          }
+        }
+      }
+    }
+  }
+}
