@@ -51,7 +51,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       researcher_name: 'د. أمل معتوق — Dr. Amal Matouk',
       created_at: new Date().toISOString().substring(0, 10),
       status: 'Ready for Analysis',
-      is_demo: false,
       completeness_threshold: 90,
       rainy_day_threshold: 1.0,
       confidence_level: 95,

@@ -265,7 +265,7 @@ export const OnePageSimplePipelineView: React.FC<OnePageSimplePipelineViewProps>
     // Step 7: Goodness of Fit
     const gevGof = computeGoodnessOfFit(fitValues, gev);
     const gumbelGof = computeGoodnessOfFit(fitValues, gumbel);
-    const bestModel = gev.aic < gumbel.aic ? gev : gumbel;
+    const bestModel = (gev.aic ?? Infinity) < (gumbel.aic ?? Infinity) ? gev : gumbel;
 
     // Step 8: Return Levels (2, 5, 10, 25, 50, 100, 200 years)
     // Step 10: Bootstrap Confidence Intervals (1000 replications)
@@ -788,7 +788,7 @@ export const OnePageSimplePipelineView: React.FC<OnePageSimplePipelineViewProps>
                       <div>الموقع (μ): <strong className="text-white">{analysisData.gev.mu.toFixed(2)}</strong> مم</div>
                       <div>المقياس (σ): <strong className="text-white">{analysisData.gev.sigma.toFixed(2)}</strong> مم</div>
                       <div>الشكل (ξ): <strong className="text-white">{(analysisData.gev.xi ?? 0).toFixed(3)}</strong></div>
-                      <div>AIC: {analysisData.gev.aic.toFixed(2)} | BIC: {analysisData.gev.bic.toFixed(2)}</div>
+                      <div>AIC: {analysisData.gev.aic?.toFixed(2) ?? 'N/A'} | BIC: {analysisData.gev.bic?.toFixed(2) ?? 'N/A'}</div>
                       <div>اختبار KS: p-value = {analysisData.gevGof.ks_p_value.toFixed(4)}</div>
                     </div>
                   </div>
@@ -807,7 +807,7 @@ export const OnePageSimplePipelineView: React.FC<OnePageSimplePipelineViewProps>
                       <div>الموقع (μ): <strong className="text-white">{analysisData.gumbel.mu.toFixed(2)}</strong> مم</div>
                       <div>المقياس (σ): <strong className="text-white">{analysisData.gumbel.sigma.toFixed(2)}</strong> مم</div>
                       <div>الشكل (ξ): <strong className="text-slate-400">0.000 (ثابت)</strong></div>
-                      <div>AIC: {analysisData.gumbel.aic.toFixed(2)} | BIC: {analysisData.gumbel.bic.toFixed(2)}</div>
+                      <div>AIC: {analysisData.gumbel.aic?.toFixed(2) ?? 'N/A'} | BIC: {analysisData.gumbel.bic?.toFixed(2) ?? 'N/A'}</div>
                       <div>اختبار KS: p-value = {analysisData.gumbelGof.ks_p_value.toFixed(4)}</div>
                     </div>
                   </div>
@@ -817,8 +817,8 @@ export const OnePageSimplePipelineView: React.FC<OnePageSimplePipelineViewProps>
                   <Info className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
                   <span>
                     {isAr
-                      ? `النموذج الموصى به: ${analysisData.bestModel.model} لأنه يحقق أقل قيمة لمعيار أكايكي (AIC = ${analysisData.bestModel.aic.toFixed(2)}).`
-                      : `Recommended model: ${analysisData.bestModel.model} based on lower AIC (${analysisData.bestModel.aic.toFixed(2)}).`}
+                      ? `النموذج الموصى به: ${analysisData.bestModel.model} لأنه يحقق أقل قيمة لمعيار أكايكي (AIC = ${analysisData.bestModel.aic?.toFixed(2) ?? 'N/A'}).`
+                      : `Recommended model: ${analysisData.bestModel.model} based on lower AIC (${analysisData.bestModel.aic?.toFixed(2) ?? 'N/A'}).`}
                   </span>
                 </div>
               </div>

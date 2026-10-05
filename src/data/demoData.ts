@@ -753,8 +753,8 @@ export const STORM_DANIEL_HOURLY: HourlyRecord[] = [
 
 export const INITIAL_PROJECTS: Project[] = [
   {
-    id: 'PRJ_EGYPT_NATIONAL_DEMO',
-    name: 'المشروع النموذجي الوطني: تحليل الأمطار القصوى في مصر (1981 – 2023)',
+    id: 'PRJ_EGYPT_NATIONAL_REF',
+    name: 'المشروع الوطني المرجعي: تحليل الأمطار القصوى في مصر (1981 – 2023)',
     description: 'تحليل شامل للأمطار القصوى اليومية عبر 5 أقاليم مناخية مصرية (الساحل، الدلتا، البحر الأحمر، الصعيد، والبيانات الشبكية المقارنة). إعداد وملكية علمية: د. أمل معتوق.',
     region: 'جمهورية مصر العربية (شامل)',
     station_ids: ['ALX01', 'CAI01', 'MRM01', 'HRG01', 'ASW01'],
@@ -764,7 +764,6 @@ export const INITIAL_PROJECTS: Project[] = [
     researcher_name: 'د. أمل معتوق — Dr. Amal Matouk',
     created_at: '2024-01-15',
     status: 'Analysis Completed',
-    is_demo: true,
     completeness_threshold: 90,
     rainy_day_threshold: 1.0,
     confidence_level: 95,
@@ -782,7 +781,6 @@ export const INITIAL_PROJECTS: Project[] = [
     researcher_name: 'د. أمل معتوق — Dr. Amal Matouk',
     created_at: '2024-02-01',
     status: 'Report Ready',
-    is_demo: true,
     completeness_threshold: 90,
     rainy_day_threshold: 1.0,
     confidence_level: 95,

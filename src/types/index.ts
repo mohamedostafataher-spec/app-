@@ -74,6 +74,35 @@ export interface PublicDataManifestItem {
 }
 
 
+export type TemporalFrequency =
+  | 'hourly'
+  | 'daily'
+  | 'sub_daily'
+  | 'monthly'
+  | 'quarterly'
+  | 'seasonal'
+  | 'annual'
+  | 'irregular'
+  | 'unknown';
+
+export interface TemporalDetectionResult {
+  detected_frequency: TemporalFrequency;
+  confidence: number;
+  evidence: {
+    declared_frequency?: string;
+    unit?: string;
+    median_interval_days: number;
+    date_count: number;
+    unique_dates: number;
+    regularity_score: number;
+    within_day_duplicates: number;
+  };
+  source?: string;
+  allowed_analyses: string[];
+  blocked_analyses: string[];
+  status: 'SUITABLE_FOR_DAILY_EXTREMES' | 'NOT_SUITABLE_FOR_DAILY_EXTREMES' | 'NEEDS_REVIEW';
+}
+
 export interface DailyRecord {
   date: string; // ISO YYYY-MM-DD
   station_id: string;
@@ -293,8 +322,8 @@ export interface GoodnessOfFitReport {
   chi_square_p_value?: number;
   qq_points: Array<{ empirical: number; theoretical: number }>;
   pp_points: Array<{ empirical_p: number; theoretical_p: number }>;
-  aic: number;
-  bic: number;
+  aic: number | null;
+  bic: number | null;
   recommended: boolean;
   decision_reason_ar: string;
   decision_reason_en: string;
@@ -378,7 +407,6 @@ export interface Project {
   researcher_name: string;
   created_at: string;
   status: 'Draft' | 'Data Uploaded' | 'Quality Review' | 'Ready for Analysis' | 'Analysis Completed' | 'Has Warnings' | 'Report Ready';
-  is_demo: boolean;
   completeness_threshold: number; // default 90%
   rainy_day_threshold: number; // default 1.0 mm
   confidence_level: number; // default 95%

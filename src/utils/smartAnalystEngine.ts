@@ -440,7 +440,7 @@ export function executeAnalysisPlan(
   const gevGof = computeGoodnessOfFit(valuesForFit, gevFit);
   const gumbelGof = computeGoodnessOfFit(valuesForFit, gumbelFit);
 
-  const bestFit = gevFit.aic < gumbelFit.aic ? gevFit : gumbelFit;
+  const bestFit = (gevFit.aic ?? Infinity) < (gumbelFit.aic ?? Infinity) ? gevFit : gumbelFit;
   const returnLevels = computeReturnLevelsWithBootstrap(valuesForFit, bestFit, [2, 5, 10, 25, 50, 100, 200], 5000, 95, 20261004);
 
   // Switch by topic
@@ -710,8 +710,8 @@ export function executeAnalysisPlan(
     }
 
     case 'comparison': {
-      const deltaAic = gumbelFit.aic - gevFit.aic;
-      const winner = gevFit.aic < gumbelFit.aic ? 'GEV' : 'Gumbel';
+      const deltaAic = (gumbelFit.aic ?? 0) - (gevFit.aic ?? 0);
+      const winner = (gevFit.aic ?? Infinity) < (gumbelFit.aic ?? Infinity) ? 'GEV' : 'Gumbel';
 
       return {
         run_id: runId,
@@ -735,14 +735,14 @@ export function executeAnalysisPlan(
           {
             step_num: 1,
             title: 'حساب معيار أكايكي لنموذج GEV',
-            detail: `AIC(GEV) = ${gevFit.aic.toFixed(2)} (k=3 معلمات).`,
-            value: gevFit.aic.toFixed(2),
+            detail: `AIC(GEV) = ${gevFit.aic?.toFixed(2) ?? 'N/A'} (k=3 معلمات).`,
+            value: gevFit.aic?.toFixed(2) ?? 'N/A',
           },
           {
             step_num: 2,
             title: 'حساب معيار أكايكي لنموذج Gumbel',
-            detail: `AIC(Gumbel) = ${gumbelFit.aic.toFixed(2)} (k=2 معلمات).`,
-            value: gumbelFit.aic.toFixed(2),
+            detail: `AIC(Gumbel) = ${gumbelFit.aic?.toFixed(2) ?? 'N/A'} (k=2 معلمات).`,
+            value: gumbelFit.aic?.toFixed(2) ?? 'N/A',
           },
           {
             step_num: 3,
@@ -763,8 +763,8 @@ export function executeAnalysisPlan(
             : 'يجب التحقق من سلوك الذيل العلوي في منحنى الاحتمال اللوغاريتمي.',
         ],
         notes: [
-          `GEV Log-Likelihood: ${gevFit.log_likelihood.toFixed(2)}`,
-          `Gumbel Log-Likelihood: ${gumbelFit.log_likelihood.toFixed(2)}`,
+          `GEV Log-Likelihood: ${gevFit.log_likelihood?.toFixed(2) ?? 'N/A'}`,
+          `Gumbel Log-Likelihood: ${gumbelFit.log_likelihood?.toFixed(2) ?? 'N/A'}`,
         ],
         scientific_ownership: 'إعداد وملكية علمية: د. أمل معتوق',
         timestamp: now,
@@ -965,8 +965,8 @@ export function executeAnalysisPlan(
     }
 
     case 'best_model': {
-      const winner = gevFit.aic < gumbelFit.aic ? 'GEV' : 'Gumbel';
-      const aicMin = Math.min(gevFit.aic, gumbelFit.aic);
+      const winner = (gevFit.aic ?? Infinity) < (gumbelFit.aic ?? Infinity) ? 'GEV' : 'Gumbel';
+      const aicMin = Math.min(gevFit.aic ?? Infinity, gumbelFit.aic ?? Infinity);
 
       return {
         run_id: runId,
@@ -990,7 +990,7 @@ export function executeAnalysisPlan(
           {
             step_num: 1,
             title: 'مقارنة معايير المعلومات',
-            detail: `AIC(GEV) = ${gevFit.aic.toFixed(2)} مقابل AIC(Gumbel) = ${gumbelFit.aic.toFixed(2)}.`,
+            detail: `AIC(GEV) = ${gevFit.aic?.toFixed(2) ?? 'N/A'} مقابل AIC(Gumbel) = ${gumbelFit.aic?.toFixed(2) ?? 'N/A'}.`,
           },
           {
             step_num: 2,

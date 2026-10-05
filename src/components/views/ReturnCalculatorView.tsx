@@ -53,7 +53,7 @@ export const ReturnCalculatorView: React.FC<ReturnCalculatorViewProps> = ({
 
   // Preferred model (defaults to best AIC)
   const [preferredModel, setPreferredModel] = useState<'GEV' | 'Gumbel'>(
-    gevFit.aic < gumbelFit.aic ? 'GEV' : 'Gumbel'
+    (gevFit.aic ?? Infinity) < (gumbelFit.aic ?? Infinity) ? 'GEV' : 'Gumbel'
   );
 
   const activeModel = preferredModel === 'GEV' ? gevFit : gumbelFit;
@@ -201,7 +201,7 @@ export const ReturnCalculatorView: React.FC<ReturnCalculatorViewProps> = ({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              GEV {gevFit.aic < gumbelFit.aic && '★'}
+              GEV {(gevFit.aic ?? Infinity) < (gumbelFit.aic ?? Infinity) && '★'}
             </button>
             <button
               onClick={() => setPreferredModel('Gumbel')}
@@ -211,7 +211,7 @@ export const ReturnCalculatorView: React.FC<ReturnCalculatorViewProps> = ({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Gumbel {gumbelFit.aic < gevFit.aic && '★'}
+              Gumbel {(gumbelFit.aic ?? Infinity) < (gevFit.aic ?? Infinity) && '★'}
             </button>
           </div>
         </div>

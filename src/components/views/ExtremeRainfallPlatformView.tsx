@@ -54,8 +54,10 @@ import {
   computeReturnLevelsWithBootstrap,
   analyzeStormEvent,
   generateStepByStepSubstitution,
+  detectTemporalFrequency,
+  getEnvironmentalClassification,
+  getBasinDescription,
 } from '../../utils/statisticalEngine';
-
 import {
   QQPPPlot,
   ReturnLevelCurveChart,
@@ -76,12 +78,12 @@ import { ProjectRunsManagerModal } from '../ProjectRunsManagerModal';
 import { PreExportValidationModal } from '../PreExportValidationModal';
 import { RolesReviewModal } from '../RolesReviewModal';
 import { PDFTableExtractorModal } from '../PDFTableExtractorModal';
-import { AuditTrailItem, StructuredArabicPlan } from '../../types';
+import { AuditTrailItem, StructuredArabicPlan, TemporalDetectionResult } from '../../types';
 import { runFullAnalysis } from '../../lib/api';
 
 export const ExtremeRainfallPlatformView: React.FC = () => {
   // 1. Operating Mode State
-  const [isProductionMode, setIsProductionMode] = useState<boolean>(true);
+  const isProductionMode = true;
   const [stationName, setStationName] = useState<string>('لم يتم اختيار محطة');
   const [stationId, setStationId] = useState<string>('STN_000');
   const [records, setRecords] = useState<DailyRecord[]>([]);
@@ -102,6 +104,7 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState<boolean>(false);
   const [hydro, setHydro] = useState<any>(null);
+  const [temporalResult, setTemporalResult] = useState<TemporalDetectionResult | null>(null);
   const [showFormulasModal, setShowFormulasModal] = useState<boolean>(false);
   const [calculationStepData, setCalculationStepData] = useState<CalculationStepExplanation | null>(null);
   const [showCalculationModal, setShowCalculationModal] = useState<boolean>(false);
@@ -151,6 +154,10 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
     setUploadError(null);
 
     try {
+      // Step 0: Detect Temporal Frequency
+      const temporal = detectTemporalFrequency(data);
+      setTemporalResult(temporal);
+
       const qc = computeDataQuality(data, threshold);
       const annualTotals = qc.annual_completeness.map((ac) => ({
         year: ac.year,
@@ -161,34 +168,39 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
 
       const homogeneity = computeHomogeneityAndTrend(annualTotals, stnId, stnName);
       const characterization = computeRainfallCharacterization(data, 1.0);
-      const indices = computeExtremeIndices(data, threshold);
-
-      const amsRx1 = buildAnnualMaximumSeries(indices.rx1day);
-      const amsRx3 = buildAnnualMaximumSeries(indices.rx3day);
-      const amsRx5 = buildAnnualMaximumSeries(indices.rx5day);
-
-      const fitValues = amsRx1.filter((a) => a.eligible_for_model).map((a) => a.maximum_value_mm);
-
+      
+      let amsRx1: any[] = [];
+      let amsRx3: any[] = [];
+      let amsRx5: any[] = [];
+      let fitValues: number[] = [];
       let models = null;
       let returnLevels = null;
 
-      if (fitValues.length >= 5) {
-        const gev = fitGEVLMoments(fitValues, stnId, 'Rx1day');
-        const gumbel = fitGumbelLMoments(fitValues, stnId, 'Rx1day');
-        // Selection criteria: AIC comparison
-        const bestModel = (gumbel.aic ?? Infinity) < (gev.aic ?? Infinity) ? gumbel : gev;
-        const gof = computeGoodnessOfFit(fitValues, bestModel);
-        const rl = computeReturnLevelsWithBootstrap(
-          fitValues,
-          bestModel,
-          [2, 5, 10, 25, 50, 100],
-          bootstrapReps,
-          95,
-          seed
-        );
+      if (temporal.status === 'SUITABLE_FOR_DAILY_EXTREMES') {
+        const indices = computeExtremeIndices(data, threshold);
+        amsRx1 = buildAnnualMaximumSeries(indices.rx1day);
+        amsRx3 = buildAnnualMaximumSeries(indices.rx3day);
+        amsRx5 = buildAnnualMaximumSeries(indices.rx5day);
+        fitValues = amsRx1.filter((a) => a.eligible_for_model).map((a) => a.maximum_value_mm);
 
-        models = { gev, gumbel, best: bestModel, gof };
-        returnLevels = rl;
+        if (fitValues.length >= 5) {
+          const gev = fitGEVLMoments(fitValues, stnId, 'Rx1day');
+          const gumbel = fitGumbelLMoments(fitValues, stnId, 'Rx1day');
+          // Selection criteria: AIC comparison
+          const bestModel = (gumbel.aic ?? Infinity) < (gev.aic ?? Infinity) ? gumbel : gev;
+          const gof = computeGoodnessOfFit(fitValues, bestModel);
+          const rl = computeReturnLevelsWithBootstrap(
+            fitValues,
+            bestModel,
+            [2, 5, 10, 25, 50, 100],
+            bootstrapReps,
+            95,
+            seed
+          );
+
+          models = { gev, gumbel, best: bestModel, gof };
+          returnLevels = rl;
+        }
       }
 
       // Storm Daniel (September 2023)
@@ -198,6 +210,11 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
       const validCoord = data.find((r) => r.latitude !== 0 && r.longitude !== 0);
       const latitude = validCoord?.latitude || 31.184;
       const longitude = validCoord?.longitude || 29.949;
+
+      // Dynamic Classification
+      const governorate = data.find(r => r.governorate && r.governorate !== 'مصر')?.governorate || 'غير محدد';
+      const envClass = getEnvironmentalClassification(latitude, longitude, governorate);
+      const basinDesc = getBasinDescription(latitude, longitude);
 
       const results = {
         qc,
@@ -216,12 +233,15 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
         canModel: fitValues.length >= 5,
         latitude,
         longitude,
+        governorate,
+        environmental_classification: envClass,
+        basin_description: basinDesc,
         source: srcName,
         fileName: fName,
+        temporal,
       };
 
       setHydro(results);
-      setIsProductionMode(isProd);
       setAnalysisRunId(`RUN_${Date.now()}`);
       setAnalysisTimestamp(new Date().toLocaleString('ar-EG'));
     } catch (err: any) {
@@ -236,7 +256,7 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
     setIsLoadingAnalysis(true);
     setUploadError(null);
     try {
-      const fileName = `${station}_noaa_real_test.csv`;
+      const fileName = station === 'cairo' ? 'cairo_abbassia_noaa_real_test.csv' : `${station}_noaa_real_test.csv`;
       const response = await fetch(`/${fileName}`);
       if (!response.ok) throw new Error('فشل تحميل الملف من الخادم');
       const csvText = await response.text();
@@ -459,7 +479,6 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
     manualStationName: string,
     manualStationId: string
   ) => {
-    setIsProductionMode(true);
     setStationName(manualStationName);
     setStationId(manualStationId);
     setRecords(manualRecords);
@@ -1159,6 +1178,27 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
               )}
 
               {/* STATION IDENTITY & METADATA CARD (Page 23-24 Mandate) */}
+              {temporalResult && temporalResult.status === 'NOT_SUITABLE_FOR_DAILY_EXTREMES' && (
+                <div className="bg-rose-50 border border-rose-200 p-6 rounded-[2rem] flex flex-col items-center text-center space-y-4 shadow-xl animate-in zoom-in-95 duration-500">
+                  <div className="w-20 h-20 rounded-3xl bg-rose-100 flex items-center justify-center text-rose-600 shadow-inner">
+                    <AlertTriangle className="w-10 h-10" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-black text-rose-950">تنبيه: نوع البيانات غير متوافق (Temporal Frequency Mismatch)</h3>
+                    <p className="text-sm text-rose-900/80 leading-relaxed max-w-2xl">
+                      تم اكتشاف أن البيانات المرفوعة ذات تردد <strong>{temporalResult.detected_frequency}</strong> (بثقة {Math.round(temporalResult.confidence * 100)}%).
+                      قواعد الهيدرولوجيا الصارمة في هذه المنصة تمنع حساب مؤشرات التطرف اليومية (Rx1/3/5) وخرائط السيول من سجلات غير يومية.
+                    </p>
+                    <div className="bg-white/60 p-3 rounded-2xl border border-rose-100 text-[11px] font-mono text-rose-800 flex items-center justify-center gap-4">
+                      <span>Median Interval: {temporalResult.evidence.median_interval_days} days</span>
+                      <span>•</span>
+                      <span>Detection: {temporalResult.detected_frequency}</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-rose-700 italic">.الحل: يرجى رفع سجل رصد يومي (Daily) أو ساعي (Hourly) لتفعيل كافة التحليلات</p>
+                </div>
+              )}
+
               <div className="bg-[#12304A] text-white rounded-[2rem] p-8 shadow-xl border border-blue-900/50 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
                   <div className="absolute top-[-20%] right-[-10%] w-64 h-64 rounded-full bg-cyan-400 blur-3xl" />
@@ -1187,7 +1227,7 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
                     <div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">المنطقة البيئية</div>
                       <div className="text-sm font-bold text-cyan-300">
-                        {hydro.latitude < 25 ? 'الصعيد / مناخ صحراوي' : (hydro.latitude > 30 ? 'الساحل الشمالي' : 'وادي النيل / الدلتا')}
+                        {hydro.environmental_classification}
                       </div>
                     </div>
                     <div>
@@ -1196,11 +1236,37 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">الحوض الهيدرولوجي</div>
-                      <div className="text-sm font-bold text-amber-300/80 italic">غير محدد (يتطلب طبقة GIS)</div>
+                      <div className="text-sm font-bold text-amber-300/80 italic">{hydro.basin_description}</div>
                     </div>
                   </div>
                 </div>
               </div>
+
+              {/* DATA AGE WARNING FOR HISTORICAL RECORDS (Page 49 PDF) */}
+              {parseInt(hydro.qc.start_date.slice(0, 4)) < 1920 && (
+                <div className="bg-amber-50 border border-amber-200 p-5 rounded-3xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                    <AlertTriangle className="w-6 h-6" />
+                  </div>
+                  <div className="text-xs text-amber-900 leading-relaxed">
+                    <p className="font-black text-sm mb-1">تنبيه: سجل تاريخي قديم (Data Age Warning)</p>
+                    <p>هذا السجل يغطي فترة قديمة ({hydro.qc.start_date} إلى {hydro.qc.end_date}). قد لا يمثل ظروف القياس أو البيئة العمرانية الحالية في ظل التغير المناخي المتسارع. لا تستخدم هذه النتائج وحدها لاتخاذ قرارات تصميمية نهائية دون مراجعة الاتجاهات الحديثة.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* CRITICAL BLOCKING WARNING IF N < 10 (Page 42 PDF) */}
+              {hydro.nYears < 10 && (
+                <div className="bg-red-50 border border-red-200 p-5 rounded-3xl flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 shrink-0">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <div className="text-xs text-red-900 leading-relaxed">
+                    <p className="font-black text-sm mb-1">تحذير حرج: طول سجل غير كافٍ (Critical Record Length)</p>
+                    <p>سلسلة AMS تحتوي على {hydro.nYears} سنوات مؤهلة فقط (أقل من 10 سنوات). وفقاً للمعايير الهيدرولوجية، لا يمكن إصدار تقرير تصميمي معتمد لهذه المحطة. النتائج المعروضة هي <strong>لغرض الاستكشاف والبحث العلمي فقط</strong> ولا تصلح للاعتماد الهندسي.</p>
+                  </div>
+                </div>
+              )}
 
               <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 no-print">
                 {[
@@ -1209,10 +1275,10 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
       label: 'المتوسط السنوي للأمطار', 
       value: hydro.characterization.annual_mean_mm, 
       unit: 'مم/سنة', 
-      sub: hydro.latitude < 25 ? 'مناخ صحراوي جاف' : (hydro.latitude > 30 ? 'المناخ الساحلي' : 'مناخ وادي النيل')
+      sub: hydro.environmental_classification
     },
     { label: 'سنوات الرصد المؤهلة لـ AMS', value: hydro.nYears, unit: 'سنة', sub: 'استيفاء حد الاكتمال' },
-                  { label: 'النموذج الإحصائي الأنسب', value: hydro.models?.best?.model || 'Gumbel', unit: '', sub: 'معيار AIC والأقل تشتتاً' },
+                  { label: 'النموذج الإحصائي الأنسب', value: hydro.models?.best?.model || 'غير متوفر', unit: '', sub: 'معيار AIC والأقل تشتتاً' },
                 ].map((stat, i) => (
                   <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between h-28 hover:shadow-md transition-shadow">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{stat.label}</span>
@@ -1349,9 +1415,15 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
                           <tr key={row.year} className={row.eligible_for_ams ? 'bg-white hover:bg-slate-50' : 'bg-amber-50/40 hover:bg-amber-50/70'}>
                             <td className="p-3 font-bold text-slate-900">{row.year}</td>
                             <td className="p-3 text-slate-500">{row.expected_records}</td>
-                            <td className="p-3 text-slate-700 font-bold">{row.actual_records}</td>
-                            <td className="p-3 text-slate-500">{row.missing_records}</td>
-                            <td className="p-3 font-bold text-blue-600">{row.completeness_percentage}%</td>
+                            <td className="p-3 text-slate-700 font-bold">{row.actual_records === 0 ? '—' : row.actual_records}</td>
+                            <td className="p-3 text-slate-500">{row.actual_records === 0 ? '365/366' : row.missing_records}</td>
+                            <td className="p-3 font-bold text-blue-600">
+                              {row.actual_records === 0 ? (
+                                <span className="text-red-600">Not Available</span>
+                              ) : (
+                                `${row.completeness_percentage}%`
+                              )}
+                            </td>
                             <td className="p-3">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                 row.eligible_for_ams ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'
@@ -1421,10 +1493,10 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
                           return (
                             <tr key={a.year} className="hover:bg-slate-50">
                               <td className="p-3 font-bold text-slate-900">{a.year}</td>
-                              <td className="p-3 text-blue-600 font-bold">{a.maximum_value_mm} مم</td>
-                              <td className="p-3 text-emerald-600 font-bold">{rx3Val} مم</td>
-                              <td className="p-3 text-purple-600 font-bold">{rx5Val} مم</td>
-                              <td className="p-3 text-slate-500 font-sans text-[10px]">{start3} ← {end3}</td>
+                              <td className="p-3 text-blue-600 font-bold">{a.maximum_value_mm === null || a.maximum_value_mm === 0 && !a.eligible_for_model ? 'Not Available' : `${a.maximum_value_mm} مم`}</td>
+                              <td className="p-3 text-emerald-600 font-bold">{rx3Val === null || rx3Val === 0 && !a.eligible_for_model ? 'Not Available' : `${rx3Val} مم`}</td>
+                              <td className="p-3 text-purple-600 font-bold">{rx5Val === null || rx5Val === 0 && !a.eligible_for_model ? 'Not Available' : `${rx5Val} مم`}</td>
+                              <td className="p-3 text-slate-500 font-sans text-[10px]">{a.eligible_for_model ? `${start3} ← ${end3}` : '—'}</td>
                             </tr>
                           );
                         })}
@@ -1770,32 +1842,61 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Seed Controls from Page 19 */}
-                    <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold">
-                      <span className="text-slate-500 px-2">Seed:</span>
-                      {[42, 99].map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => {
-                            setRandomSeed(s);
-                            executeScientificPipeline(
-                              records,
-                              stationName,
-                              stationId,
-                              uploadedFileSource,
-                              uploadedFileName,
-                              completenessThreshold,
-                              s,
-                              isProductionMode
-                            );
-                          }}
-                          className={`px-3 py-1 rounded-lg font-mono transition-colors cursor-pointer ${
-                            randomSeed === s ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-200'
-                          }`}
-                        >
-                          {s}
-                        </button>
-                      ))}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 text-[10px] font-bold">
+                        <span className="text-slate-500 px-2 uppercase">Accuracy:</span>
+                        {[1000, 5000, 10000].map((v) => (
+                          <button
+                            key={v}
+                            onClick={() => {
+                              setBootstrapReps(v);
+                              executeScientificPipeline(
+                                records,
+                                stationName,
+                                stationId,
+                                uploadedFileSource,
+                                uploadedFileName,
+                                completenessThreshold,
+                                randomSeed,
+                                isProductionMode
+                              );
+                            }}
+                            className={`px-2 py-0.5 rounded-lg transition-all ${
+                              bootstrapReps === v ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Seed Controls from Page 19 */}
+                      <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                        <span className="text-slate-500 px-2">Seed:</span>
+                        {[42, 99].map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => {
+                              setRandomSeed(s);
+                              executeScientificPipeline(
+                                records,
+                                stationName,
+                                stationId,
+                                uploadedFileSource,
+                                uploadedFileName,
+                                completenessThreshold,
+                                s,
+                                isProductionMode
+                              );
+                            }}
+                            className={`px-3 py-1 rounded-lg font-mono transition-colors cursor-pointer ${
+                              randomSeed === s ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-200'
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
@@ -1857,22 +1958,38 @@ export const ExtremeRainfallPlatformView: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[10px] font-mono">
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <span className="text-[10px] text-slate-400 font-sans block mb-1">Analysis Run ID</span>
+                    <span className="text-[9px] text-slate-400 font-sans block mb-1">Analysis Run ID</span>
                     <span className="font-bold text-blue-900 truncate block">{analysisRunId}</span>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <span className="text-[10px] text-slate-400 font-sans block mb-1">اسم ملف الإدخال</span>
+                    <span className="text-[9px] text-slate-400 font-sans block mb-1">اسم ملف الإدخال</span>
                     <span className="font-bold text-slate-800 truncate block">{uploadedFileName}</span>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <span className="text-[10px] text-slate-400 font-sans block mb-1">تاريخ ووقت التحليل</span>
+                    <span className="text-[9px] text-slate-400 font-sans block mb-1">Detection Frequency</span>
+                    <span className="font-bold text-blue-600 block">{hydro.temporal?.detected_frequency || 'daily'}</span>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[9px] text-slate-400 font-sans block mb-1">QC Threshold</span>
+                    <span className="font-bold text-slate-800 block">{completenessThreshold}%</span>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[9px] text-slate-400 font-sans block mb-1">Best Model AIC</span>
+                    <span className="font-bold text-purple-600 block">{hydro.models?.best?.aic?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[9px] text-slate-400 font-sans block mb-1">Bootstrap Reps</span>
+                    <span className="font-bold text-slate-800 block">{bootstrapReps}</span>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[9px] text-slate-400 font-sans block mb-1">تاريخ ووقت التحليل</span>
                     <span className="font-bold text-slate-800 truncate block">{analysisTimestamp}</span>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <span className="text-[10px] text-slate-400 font-sans block mb-1">المالك العلمي للمنصة</span>
-                    <span className="font-bold text-slate-800 font-sans">د. أمل معتوق</span>
+                    <span className="text-[9px] text-slate-400 font-sans block mb-1">المالك العلمي للمنصة</span>
+                    <span className="font-bold text-slate-800 block font-sans">د. أمل معتوق</span>
                   </div>
                 </div>
               </section>

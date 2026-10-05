@@ -117,7 +117,7 @@ async function startServer() {
       if (fitValues.length >= 5) {
         const gev = fitGEVLMoments(fitValues, 'STN', 'Rx1day');
         const gumbel = fitGumbelLMoments(fitValues, 'STN', 'Rx1day');
-        const bestModel = gev.aic < gumbel.aic ? gev : gumbel;
+        const bestModel = (gev.aic ?? Infinity) < (gumbel.aic ?? Infinity) ? gev : gumbel;
         const gof = computeGoodnessOfFit(fitValues, bestModel);
         const rl = computeReturnLevelsWithBootstrap(fitValues, bestModel, [2, 5, 10, 25, 50, 100], 1000, 95, parameters?.seed || 42);
         

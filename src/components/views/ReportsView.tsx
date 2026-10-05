@@ -112,8 +112,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       { 'البند': 'معلمة موضع GEV (μ)', 'القيمة': gevFit.mu.toFixed(2) },
       { 'البند': 'معلمة قياس GEV (σ)', 'القيمة': gevFit.sigma.toFixed(2) },
       { 'البند': 'معلمة شكل GEV (ξ)', 'القيمة': (gevFit.xi ?? 0).toFixed(3) },
-      { 'البند': 'معيار AIC لـ GEV', 'القيمة': gevFit.aic.toFixed(1) },
-      { 'البند': 'معيار AIC لـ Gumbel', 'القيمة': gumbelFit.aic.toFixed(1) },
+      { 'البند': 'معيار AIC لـ GEV', 'القيمة': gevFit.aic?.toFixed(1) ?? 'N/A' },
+      { 'البند': 'معيار AIC لـ Gumbel', 'القيمة': gumbelFit.aic?.toFixed(1) ?? 'N/A' },
       { 'البند': 'الملكية العلمية', 'القيمة': 'د. أمل معتوق — Dr. Amal Matouk' },
     ];
     const ws2 = XLSX.utils.json_to_sheet(summaryData);

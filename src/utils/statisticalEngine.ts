@@ -19,12 +19,107 @@ import {
   ReturnLevelRecord,
   StatisticalSafetyScore,
   ResultTrustFingerprint,
-  CalculationStepExplanation
+  CalculationStepExplanation,
+  HourlyRecord,
+  TemporalDetectionResult,
+  TemporalFrequency
 } from '../types';
 
 // ==========================================
 // 1. Math Helper Functions
 // ==========================================
+
+export function detectTemporalFrequency(
+  records: DailyRecord[] | HourlyRecord[],
+  declaredFrequency?: string,
+  unit?: string
+): TemporalDetectionResult {
+  if (!records || records.length < 2) {
+    return {
+      detected_frequency: 'unknown',
+      confidence: 0,
+      evidence: { median_interval_days: 0, date_count: records?.length || 0, unique_dates: 0, regularity_score: 0, within_day_duplicates: 0 },
+      allowed_analyses: [],
+      blocked_analyses: ['Rx1day', 'Rx3day', 'Rx5day', 'daily_AMS', 'GEV_daily', 'Gumbel_daily'],
+      status: 'NEEDS_REVIEW',
+    };
+  }
+
+  // Extract dates and check for within-day duplicates (suggests hourly/sub-daily)
+  const dateStrs = records.map(r => ('date' in r ? r.date : r.datetime).slice(0, 10));
+  const uniqueDates = new Set(dateStrs);
+  const withinDayDuplicates = records.length - uniqueDates.size;
+
+  const dates = records.map(r => new Date('date' in r ? r.date : r.datetime)).sort((a, b) => a.getTime() - b.getTime());
+  const intervals: number[] = [];
+  for (let i = 1; i < dates.length; i++) {
+    const diff = (dates[i].getTime() - dates[i-1].getTime()) / (1000 * 3600 * 24);
+    if (diff > 0) intervals.push(diff);
+  }
+
+  const sortedIntervals = [...intervals].sort((a, b) => a - b);
+  const medianInterval = sortedIntervals.length > 0 ? sortedIntervals[Math.floor(sortedIntervals.length / 2)] : 0;
+  
+  // Calculate regularity (how many intervals match the median)
+  const regularityCount = intervals.filter(d => Math.abs(d - medianInterval) < 0.1).length;
+  const regularityScore = intervals.length > 0 ? regularityCount / intervals.length : 0;
+
+  let detected: TemporalFrequency = 'unknown';
+  let confidence = 0.5;
+
+  if (withinDayDuplicates > records.length * 0.5) {
+    if (medianInterval < 0.04) {
+      detected = 'sub_daily';
+    } else {
+      detected = 'hourly';
+    }
+    confidence = 0.9;
+  } else if (medianInterval >= 0.8 && medianInterval <= 1.2) {
+    detected = 'daily';
+    confidence = 0.95;
+  } else if (medianInterval >= 27 && medianInterval <= 32) {
+    detected = 'monthly';
+    confidence = 0.9;
+  } else if (medianInterval >= 80 && medianInterval <= 100) {
+    detected = 'quarterly';
+  } else if (medianInterval >= 330 && medianInterval <= 400) {
+    detected = 'annual';
+    confidence = 0.85;
+  } else {
+    detected = 'irregular';
+  }
+
+  // Override with declared if it seems plausible
+  if (declaredFrequency) {
+    const dec = declaredFrequency.toLowerCase();
+    if (dec.includes('hour') && withinDayDuplicates > 0) detected = 'hourly';
+    if (dec.includes('day') && medianInterval < 1.5) detected = 'daily';
+    if (dec.includes('month') && medianInterval > 20) detected = 'monthly';
+  }
+
+  const isDaily = detected === 'daily' || detected === 'hourly' || detected === 'sub_daily';
+  
+  return {
+    detected_frequency: detected,
+    confidence,
+    evidence: {
+      declared_frequency: declaredFrequency,
+      unit,
+      median_interval_days: Math.round(medianInterval * 100) / 100,
+      date_count: records.length,
+      unique_dates: uniqueDates.size,
+      regularity_score: Math.round(regularityScore * 100) / 100,
+      within_day_duplicates: withinDayDuplicates
+    },
+    allowed_analyses: isDaily 
+      ? ['Rx1day', 'Rx3day', 'Rx5day', 'daily_AMS', 'GEV_daily', 'Gumbel_daily', 'homogeneity', 'trends']
+      : ['monthly_totals', 'annual_totals', 'climatology', 'long_term_trends'],
+    blocked_analyses: !isDaily 
+      ? ['Rx1day', 'Rx3day', 'Rx5day', 'daily_AMS', 'GEV_daily', 'Gumbel_daily']
+      : [],
+    status: isDaily ? 'SUITABLE_FOR_DAILY_EXTREMES' : 'NOT_SUITABLE_FOR_DAILY_EXTREMES',
+  };
+}
 
 export function gammaFunction(z: number): number {
   // Lanczos approximation for Gamma(z)
@@ -139,11 +234,14 @@ export function reconstructDailyCalendar(records: DailyRecord[]): ReconstructedC
     } else {
       let rain: number | null = null;
       if (r.rainfall_mm !== null && r.rainfall_mm !== undefined && !isNaN(r.rainfall_mm)) {
-        if (r.rainfall_mm >= 0 && r.quality_flag !== 'rejected_negative' && r.quality_flag !== 'missing') {
+        if (r.rainfall_mm >= 0 && r.quality_flag !== 'rejected_negative') {
           rain = r.rainfall_mm;
         }
       }
-      dateMap.set(dStr, rain !== null ? rain : -1);
+      // If quality flag is missing, we treat as null but we still mark the date as present to avoid counting as gap
+      if (r.quality_flag === 'missing') rain = null;
+
+      dateMap.set(dStr, rain !== null ? rain : -9999.0);
       validRecords.push({ date: dStr, rainfall_mm: rain });
     }
   });
@@ -183,8 +281,8 @@ export function reconstructDailyCalendar(records: DailyRecord[]): ReconstructedC
   while (cur <= endD) {
     const curStr = cur.toISOString().split('T')[0];
     const hasRecord = dateMap.has(curStr);
-    const recordedVal = hasRecord ? dateMap.get(curStr)! : -1;
-    const isMissing = !hasRecord || recordedVal === -1;
+    const recordedVal = hasRecord ? dateMap.get(curStr)! : -9999.0;
+    const isMissing = !hasRecord || recordedVal === -9999.0;
 
     if (isMissing) {
       missingCalendarDays++;
@@ -345,9 +443,11 @@ export function computeDataQuality(
         expected_records: expected,
         actual_records: validActual,
         missing_records: missingRecords,
-        completeness_percentage: pct,
-        eligible_for_ams: eligible,
-        exclusion_reason: exclusionReason,
+        completeness_percentage: yearDays.filter(d => !d.is_missing).length > 0 ? pct : 0,
+        eligible_for_ams: yearDays.filter(d => !d.is_missing).length > 0 && eligible,
+        exclusion_reason: yearDays.filter(d => !d.is_missing).length === 0 
+          ? 'السنة لا تحتوي على أي بيانات (لا توجد سجلات فعلياً)' 
+          : !eligible ? exclusionReason : undefined,
         warning: exclusionReason,
       };
     });
@@ -1440,7 +1540,7 @@ export function computeGoodnessOfFit(
     ad_passed: adPassed,
     cvm_statistic: Math.round(cvmStat * 1000) / 1000,
     chi_square_statistic: Math.round(chiSquareStat * 100) / 100,
-    chi_square_p_value: Math.round(chiSquareP * 1000) / 1000,
+    chi_square_p_value: Math.round((chiSquareP ?? 0) * 1000) / 1000,
     qq_points: qqPoints,
     pp_points: ppPoints,
     aic: fit.aic,
@@ -2199,7 +2299,7 @@ export function computeManualAMSSeriesCalculation(
   const gumbel = fitGumbelLMoments(values, 'MANUAL_STN', 'Rx1day');
 
   // Model selection (AIC)
-  const selectedModel = gumbel.aic <= gev.aic ? 'Gumbel' : 'GEV';
+  const selectedModel = (gumbel.aic ?? Infinity) <= (gev.aic ?? Infinity) ? 'Gumbel' : 'GEV';
   const bestFit = selectedModel === 'Gumbel' ? gumbel : gev;
   const gof = computeGoodnessOfFit(values, bestFit);
 
@@ -2224,5 +2324,57 @@ export function computeManualAMSSeriesCalculation(
     warnings,
     source,
   };
+}
+
+// ==========================================
+// 19. Environmental & Basin Classification Helpers
+// ==========================================
+
+export function getEnvironmentalClassification(lat: number, lon: number, governorate?: string): string {
+  if (!lat || !lon) return 'غير محدد (نقص الإحداثيات)';
+
+  const gov = String(governorate || '').toLowerCase();
+  
+  // Rule-based classification (Page 40 PDF)
+  if (gov.includes('cairo') || gov.includes('giza') || gov.includes('qalyubia') || gov.includes('القاهرة') || gov.includes('الجيزة') || gov.includes('القليوبية')) {
+    return 'القاهرة الكبرى / وادي النيل';
+  }
+  
+  if (gov.includes('alexandria') || gov.includes('matrouh') || gov.includes('الإسكندرية') || gov.includes('مطروح')) {
+    return 'الساحل الشمالي';
+  }
+
+  if (gov.includes('sinai') || gov.includes('سيناء')) {
+    return 'سيناء';
+  }
+
+  if (gov.includes('red sea') || gov.includes('البحر الأحمر') || gov.includes('hurghada') || gov.includes('الغردقة')) {
+    return 'البحر الأحمر';
+  }
+
+  if (gov.includes('aswan') || gov.includes('luxor') || gov.includes('asyut') || gov.includes('sohag') || gov.includes('minya') || gov.includes('beni suef') || gov.includes('أسوان') || gov.includes('الأقصر') || gov.includes('أسيوط') || gov.includes('سوهاج') || gov.includes('المنيا') || gov.includes('بني سويف')) {
+    return 'الصعيد';
+  }
+
+  if (gov.includes('new valley') || gov.includes('الوادي الجديد') || gov.includes('oases') || gov.includes('الواحات')) {
+    return 'الواحات والصحراء الغربية';
+  }
+
+  // Delta fallback
+  if (lat > 30.5 && lon > 29.8 && lon < 32.5) return 'الدلتا';
+  
+  // Coastal fallback
+  if (lat > 31.0) return 'الساحل الشمالي';
+
+  // Upper Egypt fallback
+  if (lat < 28.0) return 'الصعيد';
+
+  return 'منطقة جغرافية غير مصنفة';
+}
+
+export function getBasinDescription(lat: number, lon: number): string {
+  // If we had a real GIS layer, we'd query it here.
+  // For now, as per Page 41:
+  return 'الحوض الهيدرولوجي غير محدد من البيانات الحالية';
 }
 

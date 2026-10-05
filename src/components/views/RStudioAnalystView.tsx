@@ -108,7 +108,7 @@ export const RStudioAnalystView: React.FC<RStudioAnalystViewProps> = ({
     const gevGof = computeGoodnessOfFit(fitValues, gev);
     const gumbelGof = computeGoodnessOfFit(fitValues, gumbel);
 
-    const bestModel = gev.aic < gumbel.aic ? gev : gumbel;
+    const bestModel = (gev.aic ?? Infinity) < (gumbel.aic ?? Infinity) ? gev : gumbel;
 
     // 4. Return levels & bootstrap CIs
     const returnLevels = computeReturnLevelsWithBootstrap(

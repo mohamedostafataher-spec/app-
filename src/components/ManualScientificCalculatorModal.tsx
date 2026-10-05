@@ -769,7 +769,7 @@ export const ManualScientificCalculatorModal: React.FC<ManualScientificCalculato
                       <span className="text-[10px] font-bold text-slate-400 block uppercase">النموذج الأفضل ترشيحاً:</span>
                       <div className="flex items-center gap-2">
                         <span className="text-xl font-black text-[#0E7490]">{amsResult.selectedModel}</span>
-                        <span className="text-xs text-slate-500 font-mono">(AIC: {amsResult.selectedModel === 'Gumbel' ? amsResult.gumbel.aic.toFixed(1) : amsResult.gev.aic.toFixed(1)})</span>
+                        <span className="text-xs text-slate-500 font-mono">(AIC: {amsResult.selectedModel === 'Gumbel' ? amsResult.gumbel.aic?.toFixed(1) ?? 'N/A' : amsResult.gev.aic?.toFixed(1) ?? 'N/A'})</span>
                       </div>
                     </div>
                     <div className="text-left text-xs">
@@ -796,7 +796,7 @@ export const ManualScientificCalculatorModal: React.FC<ManualScientificCalculato
                       <div className="font-mono text-xs text-slate-700 space-y-0.5">
                         <div>μ (الموضع): {amsResult.gumbel.mu.toFixed(3)} مم</div>
                         <div>σ (المقياس): {amsResult.gumbel.sigma.toFixed(3)} مم</div>
-                        <div>AIC: {amsResult.gumbel.aic.toFixed(2)} | BIC: {amsResult.gumbel.bic.toFixed(2)}</div>
+                        <div>AIC: {amsResult.gumbel.aic?.toFixed(2) ?? 'N/A'} | BIC: {amsResult.gumbel.bic?.toFixed(2) ?? 'N/A'}</div>
                       </div>
                     </div>
 
@@ -804,8 +804,8 @@ export const ManualScientificCalculatorModal: React.FC<ManualScientificCalculato
                       <span className="font-bold text-slate-800 block">معاملات GEV (L-Moments):</span>
                       <div className="font-mono text-xs text-slate-700 space-y-0.5">
                         <div>μ: {amsResult.gev.mu.toFixed(3)} | σ: {amsResult.gev.sigma.toFixed(3)}</div>
-                        <div>ξ (الشكل): {amsResult.gev.xi.toFixed(3)}</div>
-                        <div>AIC: {amsResult.gev.aic.toFixed(2)} | BIC: {amsResult.gev.bic.toFixed(2)}</div>
+                        <div>ξ: {amsResult.gev.xi?.toFixed(3) ?? '0.000'}</div>
+                        <div>AIC: {amsResult.gev.aic?.toFixed(2) ?? 'N/A'} | BIC: {amsResult.gev.bic?.toFixed(2) ?? 'N/A'}</div>
                       </div>
                     </div>
                   </div>

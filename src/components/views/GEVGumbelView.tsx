@@ -36,8 +36,8 @@ export const GEVGumbelView: React.FC<GEVGumbelViewProps> = ({
   const isAr = language === 'ar';
   const [selectedModelTab, setSelectedModelTab] = useState<'GEV' | 'Gumbel'>('GEV');
 
-  const deltaAIC = Math.abs(gevFit.aic - gumbelFit.aic);
-  const preferredModel = gevFit.aic < gumbelFit.aic ? 'GEV' : 'Gumbel';
+  const deltaAIC = Math.abs((gevFit.aic ?? 0) - (gumbelFit.aic ?? 0));
+  const preferredModel = (gevFit.aic ?? Infinity) < (gumbelFit.aic ?? Infinity) ? 'GEV' : 'Gumbel';
 
   return (
     <div className="space-y-6">

@@ -63,7 +63,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const t50 = returnLevels.find((r) => r.return_period_years === 50);
   const t10 = returnLevels.find((r) => r.return_period_years === 10);
 
-  const bestModel = gevFit.aic < gumbelFit.aic ? 'GEV' : 'Gumbel';
+  const bestModel = (gevFit.aic ?? Infinity) < (gumbelFit.aic ?? Infinity) ? 'GEV' : 'Gumbel';
 
   return (
     <div className="space-y-6">
@@ -231,7 +231,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <Activity className="w-4 h-4 text-purple-400" />
           </div>
           <div className="text-lg font-bold text-purple-300">{bestModel}</div>
-          <div className="text-[11px] text-slate-400">AIC: {Math.min(gevFit.aic, gumbelFit.aic).toFixed(1)}</div>
+          <div className="text-[11px] text-slate-400">AIC: {Math.min(gevFit.aic ?? Infinity, gumbelFit.aic ?? Infinity).toFixed(1)}</div>
         </div>
 
         {/* Card 5: Return Level 50 yr */}
