@@ -32,7 +32,6 @@ import {
   Info,
 } from 'lucide-react';
 import { DailyRecord, Language, ReturnLevelRecord } from '../../types';
-import { DEMO_DAILY_RECORDS } from '../../data/demoData';
 import {
   computeDataQuality,
   computeHomogeneityAndTrend,
@@ -66,14 +65,14 @@ export const OnePageSimplePipelineView: React.FC<OnePageSimplePipelineViewProps>
 
   // State: Data
   const [stationName, setStationName] = useState<string>(
-    initialStationName || 'محطة الإسكندرية (تجريبية)'
+    initialStationName || 'محطة غير محددة'
   );
   const [records, setRecords] = useState<DailyRecord[]>(
     initialRecords && initialRecords.length > 0
       ? initialRecords
-      : DEMO_DAILY_RECORDS.filter((r) => r.station_id === 'ALX01')
+      : []
   );
-  const [hasAnalyzed, setHasAnalyzed] = useState<boolean>(true);
+  const [hasAnalyzed, setHasAnalyzed] = useState<boolean>(initialRecords && initialRecords.length > 0 ? true : false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -216,18 +215,6 @@ export const OnePageSimplePipelineView: React.FC<OnePageSimplePipelineViewProps>
     }
   };
 
-  // Load Demo Data
-  const handleLoadDemo = () => {
-    const alexRecords = DEMO_DAILY_RECORDS.filter((r) => r.station_id === 'ALX01');
-    setStationName('محطة الإسكندرية البحرية (سجل 30 سنة)');
-    setRecords(alexRecords);
-    setHasAnalyzed(true);
-    setUploadError(null);
-    if (onDataLoaded) {
-      onDataLoaded(alexRecords, 'محطة الإسكندرية البحرية (سجل 30 سنة)');
-    }
-  };
-
   // Execute All 10 Steps Deterministically in the Browser
   const analysisData = useMemo(() => {
     if (!records || records.length === 0) return null;
@@ -362,8 +349,8 @@ export const OnePageSimplePipelineView: React.FC<OnePageSimplePipelineViewProps>
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
               {isAr
-                ? 'ارفع ملفك أو استخدم البيانات التجريبية، وستُحسب الخطوات العشر كاملة داخل متصفحك مباشرة بدون خوادم وبسرعة فائقة وخصوصية كاملة.'
-                : 'Upload Excel/CSV or load demo records. All 10 scientific steps are executed in-browser with zero server upload.'}
+                ? 'ارفع ملفك، وستُحسب الخطوات العشر كاملة داخل متصفحك مباشرة بدون خوادم وبسرعة فائقة وخصوصية كاملة.'
+                : 'Upload your file. All 10 scientific steps are executed in-browser with zero server upload.'}
             </p>
           </div>
 
@@ -385,7 +372,7 @@ export const OnePageSimplePipelineView: React.FC<OnePageSimplePipelineViewProps>
           <div>
             <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
               <FileSpreadsheet className="w-4 h-4 text-cyan-400" />
-              <span>{isAr ? 'رفع ملف البيانات (Excel أو CSV) أو استخدام البيانات التجريبية' : 'Upload Data (Excel or CSV)'}</span>
+              <span>{isAr ? 'رفع ملف البيانات (Excel أو CSV)' : 'Upload Data (Excel or CSV)'}</span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               {isAr
@@ -393,14 +380,6 @@ export const OnePageSimplePipelineView: React.FC<OnePageSimplePipelineViewProps>
                 : 'File needs 2 columns: Date and Daily Rainfall (mm).'}
             </p>
           </div>
-
-          <button
-            onClick={handleLoadDemo}
-            className="w-full sm:w-auto px-3.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-650 text-slate-200 border border-slate-600 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{isAr ? 'تحميل بيانات تجريبية (الإسكندرية 30 سنة)' : 'Load Alexandria Demo (30 yrs)'}</span>
-          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

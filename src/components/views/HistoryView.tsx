@@ -28,7 +28,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ language }) => {
     {
       analysis_run_id: 'RUN-20261004-ALX-01',
       timestamp: '2024-03-01 14:30:00',
-      project_id: 'PRJ_EGYPT_NATIONAL_DEMO',
+      project_id: 'PRJ_EGYPT_NATIONAL_REF',
       station_id: 'ALX01',
       input_file_name: 'alexandria_daily_1994_2023.csv',
       input_hash: 'sha256:7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069',
@@ -54,7 +54,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ language }) => {
     {
       analysis_run_id: 'RUN-20261004-CAI-02',
       timestamp: '2024-03-01 15:10:00',
-      project_id: 'PRJ_EGYPT_NATIONAL_DEMO',
+      project_id: 'PRJ_EGYPT_NATIONAL_REF',
       station_id: 'CAI01',
       input_file_name: 'cairo_daily_1994_2023.csv',
       input_hash: 'sha256:4a35edd8b0a969b053229b0a1a0e19a4e37f07e59c193557e5e33ebfcb99a80b',

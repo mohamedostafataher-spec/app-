@@ -267,12 +267,16 @@ export interface ModelFitResult {
   mu: number;     // location
   sigma: number;  // scale (must be > 0)
   xi: number;     // shape (xi = 0 for Gumbel)
-  log_likelihood: number;
-  aic: number;
-  bic: number;
+  log_likelihood: number | null;
+  aic: number | null;
+  bic: number | null;
   convergence: boolean;
   warning?: string;
   selected?: boolean;
+  failed?: boolean;
+  reason?: string;
+  action_required?: string;
+  status?: string;
 }
 
 export interface GoodnessOfFitReport {

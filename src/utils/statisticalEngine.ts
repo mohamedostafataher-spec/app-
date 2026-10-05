@@ -1202,8 +1202,26 @@ export function fitGEVLMoments(
     }
   }
 
-  if (!validLL) {
-    ll = -9999;
+  if (!validLL || isNaN(ll) || !isFinite(ll) || Math.abs(xi) >= 0.6) {
+    return {
+      station_id: stationId,
+      index_name: indexName,
+      model: 'GEV',
+      method: 'L-Moments',
+      n_observations: n,
+      mu: Math.round(mu * 1000) / 1000,
+      sigma: Math.round(sigma * 1000) / 1000,
+      xi: Math.round(xi * 1000) / 1000,
+      log_likelihood: null,
+      aic: null,
+      bic: null,
+      convergence: false,
+      failed: true,
+      status: 'not_available',
+      reason: 'عدم تحقق شرط نطاق توزيع GEV: (1 + xi*(x-mu)/sigma > 0) لبعض المشاهدات',
+      action_required: 'استخدام نموذج Gumbel الأكثر استقراراً لهذه السلسلة',
+      warning: 'تعذر تقارب نموذج GEV ضمن النطاق المقبول؛ تم تحويل الاختيار التلقائي لنموذج Gumbel.',
+    };
   }
 
   const aic = 2 * 3 - 2 * ll;
@@ -1221,7 +1239,8 @@ export function fitGEVLMoments(
     log_likelihood: Math.round(ll * 100) / 100,
     aic: Math.round(aic * 100) / 100,
     bic: Math.round(bic * 100) / 100,
-    convergence: validLL && sigma > 0,
+    convergence: true,
+    failed: false,
   };
 }
 
@@ -1401,13 +1420,14 @@ export function computeGoodnessOfFit(
   const chiSquareP = Math.max(0.001, Math.min(1.0, 1 - normalCDF(zChi / denomChi)));
 
   const recommended = ksP > 0.05 && adPassed;
+  const sampleNote = n < 20 ? ' (مع التنبيه لصغر حجم العينة n، مما يتطلب الحذر وعدم الجزم بالملاءمة المطلقة)' : '';
   const decisionAr = recommended
-    ? `النموذج مقبول إحصائياً ومطابق لاختبارات جودة الملاءمة (KS p = ${ksP.toFixed(3)}, AD = ${adStat.toFixed(2)}, Chi2 p = ${chiSquareP.toFixed(3)}).`
-    : `النموذج يظهر بعض التباين في الذيل الأقصى أو لم يتجاوز أحد المعايير الصارمة (KS p = ${ksP.toFixed(3)}, AD = ${adStat.toFixed(2)}).`;
+    ? `لا توجد أدلة إحصائية كافية لرفض النموذج عند مستوى معنوية 5% (KS p = ${ksP.toFixed(3)}, AD = ${adStat.toFixed(2)})${sampleNote}.`
+    : `النموذج مرفوض إحصائياً أو يظهر تباعداً كبيراً في الذيل الأقصى (KS p = ${ksP.toFixed(3)}, AD = ${adStat.toFixed(2)}).`;
 
   const decisionEn = recommended
-    ? `Model passed goodness-of-fit criteria (KS p = ${ksP.toFixed(3)}, AD = ${adStat.toFixed(2)}, Chi2 p = ${chiSquareP.toFixed(3)}).`
-    : `Model shows slight deviation at tail quantiles (KS p = ${ksP.toFixed(3)}, AD = ${adStat.toFixed(2)}).`;
+    ? `Insufficient evidence to reject the model at 5% significance level (KS p = ${ksP.toFixed(3)}, AD = ${adStat.toFixed(2)}).`
+    : `Model is rejected or shows significant deviation at tail quantiles (KS p = ${ksP.toFixed(3)}, AD = ${adStat.toFixed(2)}).`;
 
   return {
     station_id: fit.station_id,

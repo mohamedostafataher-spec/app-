@@ -107,11 +107,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-bold text-white">{proj.name}</h3>
-                    {proj.is_demo && (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                        Demo
-                      </span>
-                    )}
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {proj.region} • {proj.period_start.substring(0, 4)} – {proj.period_end.substring(0, 4)}

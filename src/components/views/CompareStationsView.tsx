@@ -16,7 +16,6 @@ import {
   Info,
 } from 'lucide-react';
 import { Language, StationMetadata } from '../../types';
-import { DEMO_STATIONS } from '../../data/demoData';
 
 interface CompareStationsViewProps {
   stations: StationMetadata[];

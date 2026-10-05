@@ -186,8 +186,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-xs font-medium">{isAr ? 'فترة السجل' : 'Record Period'}</span>
             <Calendar className="w-4 h-4 text-blue-400" />
           </div>
-          <div className="text-lg font-bold text-white">30 {isAr ? 'سنة' : 'Years'}</div>
-          <div className="text-[11px] text-slate-400">1994 – 2023 ({records.length} {isAr ? 'يوم' : 'days'})</div>
+          <div className="text-lg font-bold text-white">
+            {records.length > 0 
+              ? `${Math.round(records.length / 365.25)} ${isAr ? 'سنة' : 'Years'}`
+              : '—'}
+          </div>
+          <div className="text-[11px] text-slate-400">
+            {records.length > 0 
+              ? `${records[0]?.date.split('-')[0]} – ${records[records.length - 1]?.date.split('-')[0]} (${records.length} ${isAr ? 'يوم' : 'days'})`
+              : (isAr ? 'لا توجد بيانات' : 'No data')}
+          </div>
         </div>
 
         {/* Card 2: Annual Completeness */}

@@ -17,7 +17,6 @@ import {
   Download,
   Info,
 } from 'lucide-react';
-import { DEMO_STATIONS } from '../data/demoData';
 
 interface MultiStationAnalysisModalProps {
   isOpen: boolean;

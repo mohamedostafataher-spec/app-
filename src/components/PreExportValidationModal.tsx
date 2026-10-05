@@ -57,11 +57,6 @@ export const PreExportValidationModal: React.FC<PreExportValidationModalProps> =
     let score = 100;
     const reasons: string[] = [];
 
-    if (!isProductionMode) {
-      score -= 50;
-      reasons.push('وضع تجريبي (Demo Mode) — الأرقام غير ناتجة عن قياسات حقيقية للموقع.');
-    }
-
     if (nYearsAMS < 10) {
       score -= 40;
       reasons.push(`سلسلة AMS تحتوي على ${nYearsAMS} سنوات فقط (< 10) — استقراء عالي المخاطر.`);
@@ -104,7 +99,6 @@ export const PreExportValidationModal: React.FC<PreExportValidationModalProps> =
   const checklist = [
     { label: 'وجود معرف تشغيل معتمد (Run ID)', valid: Boolean(analysisRunId), detail: analysisRunId },
     { label: 'توثيق المصدر والوحدة المعتمدة', valid: Boolean(sourceName), detail: `${sourceName} (mm)` },
-    { label: 'خلو التقرير من أرقام تجريبية في وضع الإنتاج', valid: isProductionMode, detail: isProductionMode ? 'بيانات حقيقية' : 'بيانات Demo' },
     { label: 'عدم وجود صفر مصطنع لسنة بلا بيانات', valid: !hasMissingYearWithZero, detail: 'معالجة Not Available مفعلة' },
     { label: 'حجم عينة السلسلة السنوية للتقرير التصميمي (n ≥ 10)', valid: nYearsAMS >= 10, detail: `${nYearsAMS} سنوات مؤهلة` },
     { label: 'اكتمال التوزيعات الإحصائية واختبارات الملاءمة', valid: true, detail: 'GEV, Gumbel, KS, AD' },

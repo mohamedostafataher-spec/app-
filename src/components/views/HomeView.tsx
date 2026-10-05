@@ -22,7 +22,6 @@ import {
   Compass,
 } from 'lucide-react';
 import { DailyRecord, Language, StationMetadata } from '../../types';
-import { DEMO_DAILY_RECORDS, DEMO_STATIONS } from '../../data/demoData';
 
 interface HomeViewProps {
   onDataLoaded: (records: DailyRecord[], stationMeta: StationMetadata) => void;
@@ -174,13 +173,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
     }
   };
 
-  const handleUseDemo = () => {
-    const demoStation = DEMO_STATIONS[0]; // Alexandria
-    const demoRecs = DEMO_DAILY_RECORDS.filter((r) => r.station_id === demoStation.station_id);
-    onDataLoaded(demoRecs, demoStation);
-    onGoToAnalysis();
-  };
-
   return (
     <div className="space-y-6 max-w-4xl mx-auto py-6 px-3 sm:px-0">
       {/* Hero Welcome Banner */}
@@ -253,18 +245,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <span>{errorMsg}</span>
           </div>
         )}
-
-        {/* Quick Demo Button */}
-        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 border-t border-slate-100">
-          <span className="text-xs text-[#667085]">{isAr ? 'أو ابدأ مباشرة بالبيانات المرجعية المدمجة:' : 'Or start instantly with built-in reference data:'}</span>
-          <button
-            onClick={handleUseDemo}
-            className="w-full sm:w-auto px-5 py-2.5 bg-[#F7F3E8] hover:bg-[#F4EBDD] text-[#1D2939] rounded-xl text-xs font-bold border border-[#D7B98E] flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-[#0E7490]" />
-            <span>{isAr ? 'تحميل محطة الإسكندرية النموذجية (1957 - 2023)' : 'Load Alexandria Reference Station'}</span>
-          </button>
-        </div>
       </div>
 
       {/* 3 Steps Overview Cards */}
